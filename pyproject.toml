@@ -1,0 +1,68 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "s3-navigator"
+version = "0.1.0"
+description = "Norton Commander-style interface for browsing Amazon S3 buckets"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [
+    {name = "Jochem Berends", email = "jochem.berends@example.com"}
+]
+license = {text = "MIT"}
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Utilities"
+]
+dependencies = [
+    "boto3",
+    "click",
+    "textual",  # Use textual for TUI
+    "yaspin",
+    "termcolor"
+]
+
+[project.urls]
+"Homepage" = "https://github.com/jberends/s3-navigator"
+"Bug Tracker" = "https://github.com/jberends/s3-navigator/issues"
+
+[project.scripts]
+s3-navigator = "s3_navigator.cli:main"
+
+[tool.black]
+line-length = 88
+
+[tool.isort]
+profile = "black"
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov",
+    "black",
+    "flake8",
+    "mypy",
+    "isort"
+]
