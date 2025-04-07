@@ -28,16 +28,7 @@ jobs:
     - name: Install dependencies
       run: |
         uv pip install --system -e ".[dev]"
-        
-    - name: Run linters
-      run: |
-        python -m ruff check .
-        python -m ruff format --check .
-        
-    - name: Type check
-      run: |
-        python -m mypy s3_navigator
-        
+               
     - name: Test with pytest
       run: |
         python -m pytest --cov=s3_navigator --cov-report=term

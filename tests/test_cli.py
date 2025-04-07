@@ -2,6 +2,7 @@
 
 import unittest
 from unittest import mock
+from unittest.mock import MagicMock
 
 from click.testing import CliRunner
 
@@ -16,7 +17,7 @@ class TestCLI(unittest.TestCase):
         self.runner = CliRunner()
 
     @mock.patch("s3_navigator.cli.S3Navigator")
-    def test_cli_default_options(self, mock_navigator):
+    def test_cli_default_options(self, mock_navigator: MagicMock):
         """Test CLI with default options."""
         # Setup mock
         mock_instance = mock.MagicMock()
@@ -31,7 +32,7 @@ class TestCLI(unittest.TestCase):
         mock_instance.run.assert_called_once()
 
     @mock.patch("s3_navigator.cli.S3Navigator")
-    def test_cli_with_options(self, mock_navigator):
+    def test_cli_with_options(self, mock_navigator: MagicMock):
         """Test CLI with custom options."""
         # Setup mock
         mock_instance = mock.MagicMock()
@@ -50,7 +51,7 @@ class TestCLI(unittest.TestCase):
         mock_instance.run.assert_called_once()
 
     @mock.patch("s3_navigator.cli.S3Navigator")
-    def test_cli_with_error(self, mock_navigator):
+    def test_cli_with_error(self, mock_navigator: MagicMock):
         """Test CLI handling errors."""
         # Setup mock to raise exception
         mock_instance = mock.MagicMock()

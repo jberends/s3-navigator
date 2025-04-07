@@ -13,7 +13,7 @@ from s3_navigator.navigator import S3Navigator
     "--region", default="eu-central-1", help="AWS region to use. Default: eu-central-1"
 )
 @click.option(
-    "--serve", is_flag=True, help="Run in textual serve mode in a web browser."
+    "--serve", is_flag=True, default=False, help="Run in textual serve mode (web browser)"
 )
 def main(profile: str, region: str, serve: bool) -> None:
     """Launch the S3 Navigator interface."""

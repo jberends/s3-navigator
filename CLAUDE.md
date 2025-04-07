@@ -12,9 +12,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Run with profile: `s3-navigator --profile <profile_name> --region <region_name>`
 - Run tests: `uv run pytest`
 - Run single test: `uv run pytest tests/test_file.py::test_function`
+- Run specific test class: `uv run pytest tests/test_file.py::TestClass`
 - Lint: `uv run ruff check .`
 - Format: `uv run ruff format .`
 - Typecheck: `uv run mypy s3_navigator`
+- Coverage report: `uv run pytest --cov=s3_navigator`
 
 ### Code Style Guidelines
 - **Python Version**: 3.9+
@@ -25,8 +27,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Error Handling**: Use explicit exception types, handle AWS API errors gracefully
 - **Documentation**: Google-style docstrings for all functions and classes
 - **Type Hints**: Python type annotations for all function parameters and return values
+- **Testing**: Use unittest with pytest, mock AWS services instead of accessing them directly
 
 ### Dependencies
 - Primary: boto3, click, textual, yaspin, termcolor
-- Dev: pytest, ruff, mypy, types-boto3
+- Dev: pytest, pytest-cov, ruff, mypy, types-boto3, botocore-stubs
 - Default AWS region: eu-central-1

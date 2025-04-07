@@ -3,6 +3,7 @@
 import unittest
 from datetime import datetime
 from unittest import mock
+from unittest.mock import MagicMock
 
 from s3_navigator.ui.display import Display, S3NavigatorDisplay
 
@@ -113,8 +114,8 @@ class TestS3NavigatorDisplay(unittest.TestCase):
         self.assertEqual(self.app.current_items, [])
 
     @mock.patch("s3_navigator.ui.display.events.Key")
-    def test_on_key(self, mock_key_event):
-        """Test key event handling."""
+    def test_on_key(self, mock_key_event: MagicMock) -> None:
+        """Test keyboard event handling."""
         # Test quit key
         mock_key_event.key = "q"
         with mock.patch.object(self.app, "exit") as mock_exit:

@@ -9,7 +9,7 @@ import boto3
 class S3Client:
     """Client for interacting with AWS S3 services."""
 
-    def __init__(self, profile: Optional[str] = None, region: str = "eu-central-1"):
+    def __init__(self, profile: Optional[str] = None, region: str = "eu-central-1") -> None:
         """Initialize the S3 client.
 
         Args:

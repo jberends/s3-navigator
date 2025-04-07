@@ -225,7 +225,7 @@ class S3NavigatorDisplay(App):
 class Display:
     """Legacy display adapter to bridge between navigator and Textual app."""
 
-    def __init__(self, console=None):
+    def __init__(self, console=None) -> None:
         """Initialize the display manager.
 
         Args:
