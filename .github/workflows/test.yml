@@ -31,20 +31,20 @@ jobs:
         
     - name: Install dependencies
       run: |
-        uv pip install -e ".[dev]"
+        uv pip install --system -e ".[dev]"
         
     - name: Lint and Format Check
       run: |
-        uv run ruff check .
-        uv run ruff format --check .
+        python -m ruff check .
+        python -m ruff format --check .
         
     - name: Type check
       run: |
-        uv run mypy s3_navigator
+        python -m mypy s3_navigator
         
     - name: Test with pytest
       run: |
-        uv run pytest --cov=s3_navigator --cov-report=xml
+        python -m pytest --cov=s3_navigator --cov-report=xml
         
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3

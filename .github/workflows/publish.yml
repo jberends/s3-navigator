@@ -26,10 +26,10 @@ jobs:
         uv --version
     - name: Install dependencies
       run: |
-        uv pip install -e ".[dev]"
+        uv pip install --system -e ".[dev]"
     - name: Run tests
       run: |
-        uv run pytest
+        python -m pytest
   
   deploy:
     name: Build and publish to PyPI
@@ -50,13 +50,13 @@ jobs:
         uv --version
     - name: Install dependencies
       run: |
-        uv pip install build twine
+        uv pip install --system build twine
     - name: Build distribution
       run: |
-        uv run python -m build
+        python -m build
     - name: Check distribution
       run: |
-        uv run twine check dist/*
+        python -m twine check dist/*
     - name: Publish to PyPI
       env:
         # PyPI API token should be stored as a GitHub repository secret
@@ -64,4 +64,4 @@ jobs:
         TWINE_USERNAME: __token__
         TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
       run: |
-        uv run twine upload dist/*
+        python -m twine upload dist/*
