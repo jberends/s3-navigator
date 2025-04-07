@@ -4,6 +4,7 @@ import unittest
 from unittest import mock
 
 from click.testing import CliRunner
+
 from s3_navigator.cli import main
 
 
@@ -14,7 +15,7 @@ class TestCLI(unittest.TestCase):
         """Set up test fixtures."""
         self.runner = CliRunner()
 
-    @mock.patch('s3_navigator.cli.S3Navigator')
+    @mock.patch("s3_navigator.cli.S3Navigator")
     def test_cli_default_options(self, mock_navigator):
         """Test CLI with default options."""
         # Setup mock
@@ -26,10 +27,10 @@ class TestCLI(unittest.TestCase):
 
         # Verify results
         self.assertEqual(result.exit_code, 0)
-        mock_navigator.assert_called_once_with(profile=None, region='eu-central-1')
+        mock_navigator.assert_called_once_with(profile=None, region="eu-central-1")
         mock_instance.run.assert_called_once()
 
-    @mock.patch('s3_navigator.cli.S3Navigator')
+    @mock.patch("s3_navigator.cli.S3Navigator")
     def test_cli_with_options(self, mock_navigator):
         """Test CLI with custom options."""
         # Setup mock
@@ -37,14 +38,18 @@ class TestCLI(unittest.TestCase):
         mock_navigator.return_value = mock_instance
 
         # Run command with options
-        result = self.runner.invoke(main, ['--profile', 'test-profile', '--region', 'us-west-2'])
+        result = self.runner.invoke(
+            main, ["--profile", "test-profile", "--region", "us-west-2"]
+        )
 
         # Verify results
         self.assertEqual(result.exit_code, 0)
-        mock_navigator.assert_called_once_with(profile='test-profile', region='us-west-2')
+        mock_navigator.assert_called_once_with(
+            profile="test-profile", region="us-west-2"
+        )
         mock_instance.run.assert_called_once()
 
-    @mock.patch('s3_navigator.cli.S3Navigator')
+    @mock.patch("s3_navigator.cli.S3Navigator")
     def test_cli_with_error(self, mock_navigator):
         """Test CLI handling errors."""
         # Setup mock to raise exception

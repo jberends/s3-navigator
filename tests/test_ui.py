@@ -1,8 +1,8 @@
 """Tests for the UI components."""
 
 import unittest
-from unittest import mock
 from datetime import datetime
+from unittest import mock
 
 from s3_navigator.ui.display import Display, S3NavigatorDisplay
 
@@ -18,10 +18,15 @@ class TestDisplay(unittest.TestCase):
     def test_update_view(self):
         """Test update_view method."""
         items = [
-            {'name': 'file1.txt', 'type': 'FILE', 'size': 100, 'last_modified': datetime.now()}
+            {
+                "name": "file1.txt",
+                "type": "FILE",
+                "size": 100,
+                "last_modified": datetime.now(),
+            }
         ]
-        path = ['bucket1']
-        selected_items = ['bucket1/file1.txt']
+        path = ["bucket1"]
+        selected_items = ["bucket1/file1.txt"]
 
         self.display.update_view(items, path, selected_items)
 
@@ -31,11 +36,13 @@ class TestDisplay(unittest.TestCase):
         self.assertEqual(self.display.selected_items, selected_items)
 
         # Check that app update_display is called
-        self.display.app.update_display.assert_called_once_with(items, path, selected_items)
+        self.display.app.update_display.assert_called_once_with(
+            items, path, selected_items
+        )
 
     def test_confirm_deletion(self):
         """Test confirm_deletion method."""
-        items = ['bucket1/file1.txt', 'bucket1/file2.txt']
+        items = ["bucket1/file1.txt", "bucket1/file2.txt"]
 
         # Set mock return value
         self.display.app.confirm_deletion.return_value = True
@@ -71,11 +78,11 @@ class TestS3NavigatorDisplay(unittest.TestCase):
         self.mock_sort = mock.MagicMock()
 
         # Patch textual app methods that we can't easily test
-        self.patch_compose = mock.patch.object(S3NavigatorDisplay, 'compose')
+        self.patch_compose = mock.patch.object(S3NavigatorDisplay, "compose")
         self.mock_compose = self.patch_compose.start()
         self.mock_compose.return_value = []
 
-        self.patch_on_mount = mock.patch.object(S3NavigatorDisplay, 'on_mount')
+        self.patch_on_mount = mock.patch.object(S3NavigatorDisplay, "on_mount")
         self.mock_on_mount = self.patch_on_mount.start()
 
         # Create app instance with mocked callbacks
@@ -85,7 +92,7 @@ class TestS3NavigatorDisplay(unittest.TestCase):
             item_selected_callback=self.mock_item_selected,
             delete_callback=self.mock_delete,
             refresh_callback=self.mock_refresh,
-            sort_callback=self.mock_sort
+            sort_callback=self.mock_sort,
         )
 
     def tearDown(self):
@@ -105,12 +112,12 @@ class TestS3NavigatorDisplay(unittest.TestCase):
         self.assertEqual(self.app.selected_items, [])
         self.assertEqual(self.app.current_items, [])
 
-    @mock.patch('s3_navigator.ui.display.events.Key')
+    @mock.patch("s3_navigator.ui.display.events.Key")
     def test_on_key(self, mock_key_event):
         """Test key event handling."""
         # Test quit key
         mock_key_event.key = "q"
-        with mock.patch.object(self.app, 'exit') as mock_exit:
+        with mock.patch.object(self.app, "exit") as mock_exit:
             self.app.on_key(mock_key_event)
             mock_exit.assert_called_once()
 
@@ -133,11 +140,21 @@ class TestS3NavigatorDisplay(unittest.TestCase):
         """Test updating display content."""
         # Setup test data
         items = [
-            {'name': 'file1.txt', 'type': 'FILE', 'size': 100, 'last_modified': datetime.now()},
-            {'name': 'folder1', 'type': 'DIR', 'size': 0, 'last_modified': datetime.now()}
+            {
+                "name": "file1.txt",
+                "type": "FILE",
+                "size": 100,
+                "last_modified": datetime.now(),
+            },
+            {
+                "name": "folder1",
+                "type": "DIR",
+                "size": 0,
+                "last_modified": datetime.now(),
+            },
         ]
-        path = ['bucket1']
-        selected_items = ['bucket1/file1.txt']
+        path = ["bucket1"]
+        selected_items = ["bucket1/file1.txt"]
 
         # Mock for query_one
         self.app.query_one = mock.MagicMock()

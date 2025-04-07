@@ -1,18 +1,17 @@
 """Display management for the S3 Navigator interface using Textual."""
 
 from datetime import datetime
-from typing import Dict, List, Optional, Any, Callable
+from typing import Any, Callable, Dict, List, Optional
 
-from textual.app import App, ComposeResult
-from textual.containers import Container
-from textual.widgets import Header, Footer, DataTable, Static
-from textual.reactive import reactive
 from textual import events
+from textual.app import App, ComposeResult
+from textual.reactive import reactive
+from textual.widgets import DataTable, Footer, Header, Static
 
 
 class S3NavigatorDisplay(App):
     """Textual app for S3 Navigator."""
-    
+
     CSS = """
     Screen {
         align: center middle;
@@ -42,14 +41,14 @@ class S3NavigatorDisplay(App):
         border: round $accent;
     }
     """
-    
+
     current_path = reactive([])
     selected_items = reactive([])
     current_items = reactive([])
-    
+
     def __init__(
-        self, 
-        name: str = "S3 Navigator", 
+        self,
+        name: str = "S3 Navigator",
         path_changed_callback: Optional[Callable] = None,
         item_selected_callback: Optional[Callable] = None,
         delete_callback: Optional[Callable] = None,
@@ -57,7 +56,7 @@ class S3NavigatorDisplay(App):
         sort_callback: Optional[Callable] = None,
     ):
         """Initialize the display.
-        
+
         Args:
             name: Application name
             path_changed_callback: Callback for when path changes
@@ -73,20 +72,20 @@ class S3NavigatorDisplay(App):
         self.delete_callback = delete_callback
         self.refresh_callback = refresh_callback
         self.sort_callback = sort_callback
-    
+
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
         yield Header(show_clock=True)
         yield Static("", classes="path", id="path_display")
         yield DataTable(id="item_table", classes="s3-table")
         yield Footer()
-    
+
     def on_mount(self) -> None:
         """Initialize the app on mount."""
         # Set up data table
         table = self.query_one("#item_table", DataTable)
         table.add_columns("Type", "Name", "Size", "Last Modified")
-        
+
         # Set up footer
         footer = self.query_one(Footer)
         footer.highlight_key("q", "Quit")
@@ -96,11 +95,11 @@ class S3NavigatorDisplay(App):
         footer.highlight_key("backspace", "Delete")
         footer.highlight_key("right", "Open")
         footer.highlight_key("left", "Up")
-    
+
     def on_key(self, event: events.Key) -> None:
         """Handle keyboard input."""
         key = event.key
-        
+
         if key == "q":
             self.exit()
         elif key == "r" and self.refresh_callback:
@@ -126,10 +125,12 @@ class S3NavigatorDisplay(App):
             # Navigate up one level
             if self.path_changed_callback:
                 self.path_changed_callback("up", None)
-    
-    def update_display(self, items: List[Dict[str, Any]], path: List[str], selected_items: List[str]) -> None:
+
+    def update_display(
+        self, items: List[Dict[str, Any]], path: List[str], selected_items: List[str]
+    ) -> None:
         """Update the display with new data.
-        
+
         Args:
             items: List of items to display
             path: Current path
@@ -138,7 +139,7 @@ class S3NavigatorDisplay(App):
         self.current_items = items
         self.current_path = path
         self.selected_items = selected_items
-        
+
         # Update path display
         path_widget = self.query_one("#path_display", Static)
         if path:
@@ -146,15 +147,15 @@ class S3NavigatorDisplay(App):
             path_widget.update(f"Path: {path_str}")
         else:
             path_widget.update("Path: /")
-        
+
         # Update table
         table = self.query_one("#item_table", DataTable)
         table.clear()
-        
+
         for idx, item in enumerate(items):
-            item_key = f"{'/'.join(path)}/{item['name']}".strip('/')
+            item_key = f"{'/'.join(path)}/{item['name']}".strip("/")
             is_selected = item_key in selected_items
-            
+
             # Set emoji based on type
             if item["type"] == "BUCKET":
                 type_icon = "🪣"
@@ -162,57 +163,57 @@ class S3NavigatorDisplay(App):
                 type_icon = "📁"
             else:
                 type_icon = "📄"
-                
+
             # Format size
             size_str = self._format_size(item["size"])
-            
+
             # Format last modified
             last_modified = self._format_date(item["last_modified"])
-            
+
             # Add selection marker
             name_display = f"{'* ' if is_selected else '  '}{item['name']}"
-            
+
             table.add_row(type_icon, name_display, size_str, last_modified)
-    
+
     def _format_size(self, size_bytes: int) -> str:
         """Format size in human-readable format.
-        
+
         Args:
             size_bytes: Size in bytes
-            
+
         Returns:
             Formatted size string
         """
         if size_bytes == 0:
             return "0 B"
-            
+
         units = ["B", "KB", "MB", "GB", "TB"]
         size = float(size_bytes)
         unit_index = 0
-        
+
         while size >= 1024 and unit_index < len(units) - 1:
             size /= 1024
             unit_index += 1
-            
+
         return f"{size:.1f} {units[unit_index]}"
-    
+
     def _format_date(self, date: datetime) -> str:
         """Format date in a human-readable format.
-        
+
         Args:
             date: Datetime object
-            
+
         Returns:
             Formatted date string
         """
         return date.strftime("%Y-%m-%d %H:%M")
-    
+
     def confirm_deletion(self, items: List[str]) -> bool:
         """Show deletion confirmation dialog.
-        
+
         Args:
             items: List of items to delete
-            
+
         Returns:
             True if confirmed, False otherwise
         """
@@ -223,10 +224,10 @@ class S3NavigatorDisplay(App):
 
 class Display:
     """Legacy display adapter to bridge between navigator and Textual app."""
-    
+
     def __init__(self, console=None):
         """Initialize the display manager.
-        
+
         Args:
             console: Rich console instance (not used, for compatibility)
         """
@@ -235,23 +236,25 @@ class Display:
         self.path = []
         self.items = []
         self.selected_items = []
-        
+
     def setup(self) -> None:
         """Set up the terminal for display."""
         pass  # Will be handled when we run the app
-        
+
     def teardown(self) -> None:
         """Restore terminal settings."""
         pass  # Will be handled by the app
-        
+
     def get_key(self) -> str:
         """Get a keypress from the user - not used with Textual."""
         # Not needed with Textual, but kept for compatibility
         return ""
-    
-    def update_view(self, items: List[Dict[str, Any]], path: List[str], selected_items: List[str]) -> None:
+
+    def update_view(
+        self, items: List[Dict[str, Any]], path: List[str], selected_items: List[str]
+    ) -> None:
         """Update the displayed view.
-        
+
         Args:
             items: List of items to display
             path: Current path
@@ -260,35 +263,35 @@ class Display:
         self.items = items
         self.path = path
         self.selected_items = selected_items
-        
+
         if self.app:
             self.app.update_display(items, path, selected_items)
-    
+
     def move_selection(self, direction: int) -> None:
         """Move the current selection up or down.
-        
+
         Args:
             direction: -1 for up, 1 for down
         """
         # This will be handled by Textual
         pass
-    
+
     def confirm_deletion(self, items: List[str]) -> bool:
         """Show deletion confirmation dialog.
-        
+
         Args:
             items: List of items to delete
-            
+
         Returns:
             True if confirmed, False otherwise
         """
         if self.app:
             return self.app.confirm_deletion(items)
         return False
-    
+
     def show_error(self, message: str) -> None:
         """Show an error message to the user.
-        
+
         Args:
             message: Error message to display
         """
