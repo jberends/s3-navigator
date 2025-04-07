@@ -86,6 +86,8 @@ This opens a browser window with the S3 Navigator interface, which can be useful
 S3 Navigator uses GitHub Actions for continuous integration and delivery:
 
 - **Tests**: Runs on all pull requests and pushes to main, testing on multiple Python versions and operating systems
+- **Code Coverage**: Automatically generates test coverage reports and creates a coverage badge
+  ![Coverage](https://jberends.github.io/s3-navigator/badges/badge.svg)
 - **Dependency Review**: Automatically scans dependencies for security vulnerabilities
 - **PyPI Release**: Automatically publishes releases to PyPI when a new GitHub release is created
 
