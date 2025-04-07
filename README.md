@@ -66,7 +66,8 @@ uv pip install -e ".[dev]"
 uv run pytest
 
 # Run linting and type checking
-uv run black --check .
+uv run ruff check .
+uv run ruff format --check .
 uv run mypy s3_navigator
 ```
 
