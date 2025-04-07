@@ -2,15 +2,54 @@ name: 'Dependency Review'
 
 on:
   pull_request:
+    branches: [ main ]
+  schedule:
+    # Run weekly on Sunday at midnight
+    - cron: '0 0 * * 0'
 
 permissions:
   contents: read
+  pull-requests: write # Allow commenting on PRs
 
 jobs:
   dependency-review:
+    name: Review Dependencies
     runs-on: ubuntu-latest
     steps:
       - name: 'Checkout Repository'
         uses: actions/checkout@v3
+        
       - name: 'Dependency Review'
-        uses: actions/dependency-review-action@v2
+        uses: actions/dependency-review-action@v3
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: true
+  
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+      
+      - name: Install uv
+        run: |
+          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/astral-sh/uv/main/install.sh | sh
+          export PATH="$HOME/.cargo/bin:$PATH"
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          uv --version
+      
+      - name: Install safety
+        run: |
+          uv pip install safety
+      
+      - name: Run safety check
+        run: |
+          uv pip freeze > requirements.txt
+          uv run safety check -r requirements.txt --full-report

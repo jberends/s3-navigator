@@ -4,8 +4,12 @@ on:
   release:
     types: [published]
 
+permissions:
+  contents: read
+
 jobs:
-  deploy:
+  test:
+    name: Test before publishing
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
@@ -13,18 +17,51 @@ jobs:
       uses: actions/setup-python@v4
       with:
         python-version: '3.10'
+        cache: 'pip'
     - name: Install uv
       run: |
         curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/astral-sh/uv/main/install.sh | sh
         export PATH="$HOME/.cargo/bin:$PATH"
+        echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+        uv --version
+    - name: Install dependencies
+      run: |
+        uv pip install -e ".[dev]"
+    - name: Run tests
+      run: |
+        uv run pytest
+  
+  deploy:
+    name: Build and publish to PyPI
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+        cache: 'pip'
+    - name: Install uv
+      run: |
+        curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/astral-sh/uv/main/install.sh | sh
+        export PATH="$HOME/.cargo/bin:$PATH"
+        echo "$HOME/.cargo/bin" >> $GITHUB_PATH
         uv --version
     - name: Install dependencies
       run: |
         uv pip install build twine
-    - name: Build and publish
-      env:
-        TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
-        TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+    - name: Build distribution
       run: |
         uv run python -m build
+    - name: Check distribution
+      run: |
+        uv run twine check dist/*
+    - name: Publish to PyPI
+      env:
+        # PyPI API token should be stored as a GitHub repository secret
+        # You can create a PyPI API token at https://pypi.org/manage/account/token/
+        TWINE_USERNAME: __token__
+        TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+      run: |
         uv run twine upload dist/*

@@ -80,6 +80,24 @@ s3-navigator --serve
 
 This opens a browser window with the S3 Navigator interface, which can be useful for remote operation or when you prefer a web interface.
 
+### Continuous Integration
+
+S3 Navigator uses GitHub Actions for continuous integration and delivery:
+
+- **Tests**: Runs on all pull requests and pushes to main, testing on multiple Python versions and operating systems
+- **Dependency Review**: Automatically scans dependencies for security vulnerabilities
+- **PyPI Release**: Automatically publishes releases to PyPI when a new GitHub release is created
+
+### Releasing to PyPI
+
+To release a new version to PyPI:
+
+1. Update the version in `pyproject.toml`
+2. Create a new GitHub release with a tag matching the version (e.g., `v0.1.0`)
+3. The GitHub Actions workflow will automatically build and publish to PyPI
+
+Note: To enable PyPI publishing, you need to set up a PyPI API token as a GitHub repository secret named `PYPI_TOKEN`.
+
 ## License
 
 [Apache License 2.0](LICENSE)
