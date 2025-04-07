@@ -82,4 +82,4 @@ This opens a browser window with the S3 Navigator interface, which can be useful
 
 ## License
 
-[MIT License](LICENSE)
+[Apache License 2.0](LICENSE)
