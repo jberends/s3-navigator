@@ -3,7 +3,8 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-import boto3
+import boto3  # type: ignore
+from botocore.exceptions import ClientError, NoCredentialsError, PartialCredentialsError
 
 
 class S3Client:
@@ -21,25 +22,40 @@ class S3Client:
         self.region = region
 
     def list_buckets(self) -> List[Dict[str, Any]]:
-        """List all available S3 buckets.
+        """List all S3 buckets.
 
         Returns:
-            List of bucket objects with metadata
+            List of bucket dictionaries, or an error dictionary if an error occurs.
         """
-        response = self.client.list_buckets()
-        buckets = []
-
-        for bucket in response.get("Buckets", []):
-            buckets.append(
+        try:
+            response = self.client.list_buckets()
+            buckets = []
+            for bucket in response.get("Buckets", []):
+                buckets.append(
+                    {
+                        "name": bucket["Name"],
+                        "type": "BUCKET",
+                        "size": 0,  # Bucket size requires further calls
+                        "last_modified": bucket["CreationDate"],
+                    }
+                )
+            return buckets
+        except (ClientError, NoCredentialsError, PartialCredentialsError) as e:
+            error_code = "N/A"
+            error_message = str(e)
+            if isinstance(e, ClientError):
+                error_code = e.response.get("Error", {}).get("Code", "Unknown")
+                error_message = e.response.get("Error", {}).get("Message", str(e))
+            
+            return [
                 {
-                    "name": bucket["Name"],
-                    "type": "BUCKET",
-                    "size": 0,  # Buckets don't have a size
-                    "last_modified": bucket.get("CreationDate", datetime.now()),
+                    "type": "ERROR",
+                    "name": f"Error: {error_code}",
+                    "message": error_message,
+                    "size": 0,
+                    "last_modified": datetime.now(),
                 }
-            )
-
-        return buckets
+            ]
 
     def list_objects(self, bucket: str, prefix: str = "") -> List[Dict[str, Any]]:
         """List objects in the specified bucket with prefix.
@@ -49,66 +65,84 @@ class S3Client:
             prefix: The prefix to filter objects by
 
         Returns:
-            List of objects with metadata
+            List of objects with metadata, or an error dictionary if an error occurs.
         """
         result = []
         directories = set()
 
-        # Add '..' directory if we're in a subdirectory
-        if prefix:
-            result.append(
-                {
-                    "name": "..",
-                    "type": "DIR",
-                    "size": 0,
-                    "last_modified": datetime.now(),
-                }
-            )
-
-        paginator = self.client.get_paginator("list_objects_v2")
-        page_iterator = paginator.paginate(Bucket=bucket, Prefix=prefix, Delimiter="/")
-
-        for page in page_iterator:
-            # Handle directories (CommonPrefixes)
-            for common_prefix in page.get("CommonPrefixes", []):
-                dir_name = common_prefix["Prefix"].rstrip("/").split("/")[-1]
-                if dir_name and dir_name not in directories:
-                    directories.add(dir_name)
-                    result.append(
-                        {
-                            "name": dir_name,
-                            "type": "DIR",
-                            "size": self._calculate_directory_size(
-                                bucket, common_prefix["Prefix"]
-                            ),
-                            "last_modified": datetime.now(),  # Directories don't have a last modified time
-                        }
-                    )
-
-            # Handle files (Contents)
-            for content in page.get("Contents", []):
-                # Skip the directory marker if present
-                key = content["Key"]
-                if key == prefix or key.endswith("/"):
-                    continue
-
-                # Get just the filename without the prefix
-                name = key[len(prefix) :]
-
-                # Skip if the file is actually in a subdirectory
-                if "/" in name:
-                    continue
-
+        try:
+            # Add '..' directory if we're in a subdirectory
+            if prefix:
                 result.append(
                     {
-                        "name": name,
-                        "type": "FILE",
-                        "size": content["Size"],
-                        "last_modified": content["LastModified"],
+                        "name": "..",
+                        "type": "DIR",
+                        "size": 0,
+                        "last_modified": datetime.now(),
                     }
                 )
 
-        return result
+            paginator = self.client.get_paginator("list_objects_v2")
+            page_iterator = paginator.paginate(Bucket=bucket, Prefix=prefix, Delimiter="/")
+
+            for page in page_iterator:
+                # Handle directories (CommonPrefixes)
+                for common_prefix in page.get("CommonPrefixes", []):
+                    dir_name = common_prefix["Prefix"].rstrip("/").split("/")[-1]
+                    if dir_name and dir_name not in directories:
+                        directories.add(dir_name)
+                        result.append(
+                            {
+                                "name": dir_name,
+                                "type": "DIR",
+                                "size": self._calculate_directory_size(
+                                    bucket, common_prefix["Prefix"]
+                                ),
+                                "last_modified": datetime.now(),  # Directories don't have a last modified time
+                            }
+                        )
+
+                # Handle files (Contents)
+                for content in page.get("Contents", []):
+                    # Skip the directory marker if present
+                    key = content["Key"]
+                    if key == prefix or key.endswith("/"):
+                        continue
+
+                    # Get just the filename without the prefix
+                    name = key[len(prefix) :]
+
+                    # Skip if the file is actually in a subdirectory
+                    if "/" in name:
+                        continue
+
+                    result.append(
+                        {
+                            "name": name,
+                            "type": "FILE",
+                            "size": content["Size"],
+                            "last_modified": content["LastModified"],
+                        }
+                    )
+            return result
+        except (ClientError, NoCredentialsError, PartialCredentialsError) as e:
+            error_code = "N/A"
+            error_message = str(e)
+            if isinstance(e, ClientError):
+                error_code = e.response.get("Error", {}).get("Code", "Unknown")
+                error_message = e.response.get("Error", {}).get("Message", str(e))
+            
+            # Return the error as a list containing a single error dictionary
+            # This matches the structure expected by the navigator and display logic
+            return [
+                {
+                    "type": "ERROR",
+                    "name": f"Error accessing {bucket}/{prefix or ''}: {error_code}",
+                    "message": error_message,
+                    "size": 0,
+                    "last_modified": datetime.now(),
+                }
+            ]
 
     def _calculate_directory_size(self, bucket: str, prefix: str) -> int:
         """Calculate the total size of a directory.

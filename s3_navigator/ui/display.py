@@ -42,13 +42,25 @@ class S3NavigatorDisplay(App):
     }
     """
 
-    current_path = reactive([])
-    selected_items = reactive([])
-    current_items = reactive([])
+    current_path = reactive[List[str]]([])
+    selected_items = reactive[List[str]]([])
+    current_items = reactive[List[Dict[str, Any]]]([])
+
+    BINDINGS = [
+        ("q", "quit", "Quit"),
+        ("r", "refresh", "Refresh"),
+        ("s", "sort", "Sort"),
+        ("space", "select", "Select"),
+        ("backspace", "delete", "Delete"),
+        ("right", "open", "Open"),
+        ("left", "up", "Up"),
+    ]
 
     def __init__(
         self,
         name: str = "S3 Navigator",
+        profile: Optional[str] = None,
+        region: Optional[str] = None,
         path_changed_callback: Optional[Callable] = None,
         item_selected_callback: Optional[Callable] = None,
         delete_callback: Optional[Callable] = None,
@@ -59,6 +71,8 @@ class S3NavigatorDisplay(App):
 
         Args:
             name: Application name
+            profile: AWS profile
+            region: AWS region
             path_changed_callback: Callback for when path changes
             item_selected_callback: Callback for when item is selected
             delete_callback: Callback for deletion action
@@ -66,7 +80,9 @@ class S3NavigatorDisplay(App):
             sort_callback: Callback for sort action
         """
         super().__init__()
-        self.name = name
+        self.app_title = name  # Store name as an attribute
+        self.profile = profile
+        self.region = region
         self.path_changed_callback = path_changed_callback
         self.item_selected_callback = item_selected_callback
         self.delete_callback = delete_callback
@@ -82,19 +98,30 @@ class S3NavigatorDisplay(App):
 
     def on_mount(self) -> None:
         """Initialize the app on mount."""
-        # Set up data table
+        self.title = self.app_title
         table = self.query_one("#item_table", DataTable)
         table.add_columns("Type", "Name", "Size", "Last Modified")
 
-        # Set up footer
+        # Update Footer with profile and region
         footer = self.query_one(Footer)
-        footer.highlight_key("q", "Quit")
-        footer.highlight_key("r", "Refresh")
-        footer.highlight_key("s", "Sort")
-        footer.highlight_key("space", "Select")
-        footer.highlight_key("backspace", "Delete")
-        footer.highlight_key("right", "Open")
-        footer.highlight_key("left", "Up")
+        footer_text = f"Profile: {self.profile or 'default'} | Region: {self.region or 'unknown'}"
+        # Textual's Footer displays BINDINGS automatically.
+        # To add custom text, we might need to make a custom Footer or add a Static widget.
+        # For now, let's try to update the existing footer's renderable if possible,
+        # or add a new Static widget to the footer.
+        # A simpler approach for now, given the direct `highlight_key` was removed,
+        # is to add a Static widget *above* the standard Footer for this info.
+        # However, the Footer is typically for key bindings.
+        # Let's check if Footer can have a custom renderable or if we should adjust the Header.
+        # For simplicity, let's add this to the Header's title for now, as Footer is auto-populated.
+        self.sub_title = footer_text
+
+        from textual.screen import Screen
+        if not self.screen_stack:
+            class MainScreen(Screen):
+                def compose(inner_self) -> ComposeResult:
+                    yield from self.compose()
+            self.push_screen(MainScreen())
 
     def on_key(self, event: events.Key) -> None:
         """Handle keyboard input."""
@@ -132,7 +159,7 @@ class S3NavigatorDisplay(App):
         """Update the display with new data.
 
         Args:
-            items: List of items to display
+            items: List of items to display, or an error dict
             path: Current path
             selected_items: List of selected item keys
         """
@@ -140,40 +167,42 @@ class S3NavigatorDisplay(App):
         self.current_path = path
         self.selected_items = selected_items
 
-        # Update path display
         path_widget = self.query_one("#path_display", Static)
-        if path:
-            path_str = "/".join(path)
-            path_widget.update(f"Path: {path_str}")
-        else:
-            path_widget.update("Path: /")
-
-        # Update table
         table = self.query_one("#item_table", DataTable)
         table.clear()
 
-        for idx, item in enumerate(items):
-            item_key = f"{'/'.join(path)}/{item['name']}".strip("/")
-            is_selected = item_key in selected_items
-
-            # Set emoji based on type
-            if item["type"] == "BUCKET":
-                type_icon = "🪣"
-            elif item["type"] == "DIR":
-                type_icon = "📁"
+        if items and items[0].get("type") == "ERROR":
+            error_item = items[0]
+            error_name = error_item.get("name", "Unknown Error")
+            error_message = error_item.get("message", "An unexpected error occurred.")
+            path_widget.update(f"Error: {error_name} - {error_message}")
+            # Optionally, you could add a single row to the table with the error too
+            # table.add_row("ERROR", error_name, error_message, "")
+        else:
+            # Update path display
+            if path:
+                path_str = "/".join(path)
+                path_widget.update(f"Path: {path_str}")
             else:
-                type_icon = "📄"
+                path_widget.update("Path: / (Buckets)") # Clarify when showing buckets
 
-            # Format size
-            size_str = self._format_size(item["size"])
+            # Update table
+            for idx, item in enumerate(items):
+                item_key = f"{{"/".join(path)}}/{item['name']}".strip("/")
+                is_selected = item_key in selected_items
 
-            # Format last modified
-            last_modified = self._format_date(item["last_modified"])
+                if item["type"] == "BUCKET":
+                    type_icon = "🪣"
+                elif item["type"] == "DIR":
+                    type_icon = "📁"
+                else:
+                    type_icon = "📄"
 
-            # Add selection marker
-            name_display = f"{'* ' if is_selected else '  '}{item['name']}"
+                size_str = self._format_size(item["size"])
+                last_modified = self._format_date(item["last_modified"])
+                name_display = f"{'* ' if is_selected else '  '}{item['name']}"
 
-            table.add_row(type_icon, name_display, size_str, last_modified)
+                table.add_row(type_icon, name_display, size_str, last_modified)
 
     def _format_size(self, size_bytes: int) -> str:
         """Format size in human-readable format.
@@ -225,12 +254,19 @@ class S3NavigatorDisplay(App):
 class Display:
     """Legacy display adapter to bridge between navigator and Textual app."""
 
-    def __init__(self, console=None) -> None:
+    app: Optional[S3NavigatorDisplay]
+    selected_index: int
+    path: List[str]
+    items: List[Dict[str, Any]]
+    selected_items: List[str]
+
+    def __init__(self, console: Any = None) -> None:
         """Initialize the display manager.
 
         Args:
             console: Rich console instance (not used, for compatibility)
         """
+        self.console = console
         self.app = None
         self.selected_index = 0
         self.path = []
@@ -239,7 +275,39 @@ class Display:
 
     def setup(self) -> None:
         """Set up the terminal for display."""
-        pass  # Will be handled when we run the app
+        # Create app with appropriate callbacks
+        self.app = S3NavigatorDisplay(
+            name="S3 Navigator",
+            profile=None,  # These will be set by the navigator
+            region=None,
+            path_changed_callback=None,
+            item_selected_callback=None,
+            delete_callback=None,
+            refresh_callback=None,
+            sort_callback=None,
+        )
+        
+    def run(self) -> None:
+        """Run the Textual app."""
+        if self.app:
+            # Update display with current data before running
+            self.app.update_display(self.items, self.path, self.selected_items)
+            
+            # Create a simple import we can use to create a textual screen
+            from textual.screen import Screen
+            
+            # Create a default screen and push it to the stack
+            class MainScreen(Screen):
+                def compose(self) -> ComposeResult:
+                    # Re-yield the same widgets that are in the App.compose method
+                    yield from self.app.compose()
+            
+            # Push the screen to the app's stack
+            main_screen = MainScreen()
+            self.app.push_screen(main_screen)
+            
+            # Now run the app
+            self.app.run()
 
     def teardown(self) -> None:
         """Restore terminal settings."""

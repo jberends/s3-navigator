@@ -35,31 +35,33 @@ class S3Navigator:
 
     def run(self) -> None:
         """Run the navigator interface."""
-        if hasattr(self, "textual_app"):
-            # Already running
-            return
-
-        # Create Textual app
-        self.textual_app = S3NavigatorDisplay(
+        # Create a standalone Textual app directly
+        app = S3NavigatorDisplay(
             name=f"S3 Navigator - {self.profile or 'default'} ({self.region})",
-            path_changed_callback=self._handle_path_change,
-            item_selected_callback=self._handle_item_selection,
-            delete_callback=self._delete_selected,
-            refresh_callback=self._refresh,
-            sort_callback=self._toggle_sort,
+            profile=self.profile,
+            region=self.region
         )
-
-        # Connect display to app
-        self.display.app = self.textual_app
-
-        # Start at the root level (bucket list)
+        
+        # Set up callbacks directly on the app
+        app.path_changed_callback = self._handle_path_change
+        app.item_selected_callback = self._handle_item_selection
+        app.delete_callback = self._delete_selected
+        app.refresh_callback = self._refresh
+        app.sort_callback = self._toggle_sort
+        
+        # Get initial data
         self._list_buckets()
-
+        
+        # Initialize the app with the current data
+        app.current_items = self.current_items
+        app.current_path = self.current_path
+        app.selected_items = self.selected_items
+        
         # Run the app
         if self.serve:
-            self.textual_app.run(show_renderer=False)
+            app.run()
         else:
-            self.textual_app.run()
+            app.run()
 
     def _handle_path_change(self, direction: str, item_name: Optional[str]) -> None:
         """Handle path navigation from Textual UI.
@@ -105,9 +107,16 @@ class S3Navigator:
     def _list_buckets(self) -> None:
         """List all available S3 buckets."""
         self.current_path = []
-        buckets = self.s3_client.list_buckets()
-        self.current_items = buckets
-        self._sort_items()
+        buckets_or_error = self.s3_client.list_buckets()
+
+        if buckets_or_error and buckets_or_error[0].get("type") == "ERROR":
+            # Handle the error case
+            self.current_items = buckets_or_error # This will be the error dict list
+        else:
+            # Proceed as normal
+            self.current_items = buckets_or_error
+            self._sort_items() # Only sort if not an error
+            
         self.display.update_view(
             self.current_items, self.current_path, self.selected_items
         )
@@ -123,9 +132,14 @@ class S3Navigator:
             "/" if len(self.current_path) > 1 else ""
         )
 
-        objects = self.s3_client.list_objects(bucket, prefix)
-        self.current_items = objects
-        self._sort_items()
+        objects_or_error = self.s3_client.list_objects(bucket, prefix)
+
+        if objects_or_error and objects_or_error[0].get("type") == "ERROR":
+            self.current_items = objects_or_error # Pass error to display
+        else:
+            self.current_items = objects_or_error
+            self._sort_items() # Only sort if not an error
+            
         self.display.update_view(
             self.current_items, self.current_path, self.selected_items
         )

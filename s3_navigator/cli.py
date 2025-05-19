@@ -19,6 +19,7 @@ def main(profile: str, region: str, serve: bool) -> None:
     """Launch the S3 Navigator interface."""
     navigator = S3Navigator(profile=profile, region=region, serve=serve)
     try:
+        # Use the built-in run method which handles setup and initialization
         navigator.run()
     except KeyboardInterrupt:
         # Handle Ctrl+C gracefully
