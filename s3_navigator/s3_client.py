@@ -21,16 +21,43 @@ class S3Client:
         self.client = self.session.client("s3")
         self.region = region
 
+    @property
+    def access_key_id(self) -> Optional[str]:
+        """Return the AWS Access Key ID used by the session, if available."""
+        try:
+            credentials = self.session.get_credentials()
+            if credentials:
+                # get_frozen_credentials() ensures we get a static snapshot
+                frozen_creds = credentials.get_frozen_credentials()
+                return frozen_creds.access_key
+        except Exception:
+            # If there's any issue getting credentials (e.g., not configured)
+            pass
+        return None
+
     def list_buckets(self) -> List[Dict[str, Any]]:
         """List all S3 buckets.
 
         Returns:
-            List of bucket dictionaries, or an error dictionary if an error occurs.
+            List of bucket dictionaries, an error dictionary if an error occurs, or an info dictionary if no buckets are found.
         """
         try:
             response = self.client.list_buckets()
+            buckets_data = response.get("Buckets", [])
+
+            if not buckets_data:  # No buckets returned by the API call
+                return [
+                    {
+                        "type": "INFO",
+                        "name": "No Buckets Found",
+                        "message": "Either no S3 buckets exist for the current AWS profile/region, or the credentials lack permission to list them.",
+                        "size": 0,
+                        "last_modified": datetime.now(),
+                    }
+                ]
+            
             buckets = []
-            for bucket in response.get("Buckets", []):
+            for bucket in buckets_data:
                 buckets.append(
                     {
                         "name": bucket["Name"],
@@ -50,7 +77,7 @@ class S3Client:
             return [
                 {
                     "type": "ERROR",
-                    "name": f"Error: {error_code}",
+                    "name": f"Error Listing Buckets: {error_code}",
                     "message": error_message,
                     "size": 0,
                     "last_modified": datetime.now(),

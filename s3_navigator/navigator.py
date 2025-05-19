@@ -35,11 +35,21 @@ class S3Navigator:
 
     def run(self) -> None:
         """Run the navigator interface."""
+        # Get Access Key ID for display
+        access_key_display = self.s3_client.access_key_id
+        if access_key_display and len(access_key_display) > 10: # Truncate if too long
+            access_key_display = f"...{access_key_display[-10:]}"
+        elif not access_key_display:
+            access_key_display = "Unknown"
+            
+        app_name = f"S3 Navigator - Profile: {self.profile or 'default'} (Region: {self.region}, KeyID: {access_key_display})"
+
         # Create a standalone Textual app directly
         app = S3NavigatorDisplay(
-            name=f"S3 Navigator - {self.profile or 'default'} ({self.region})",
+            name=app_name,
             profile=self.profile,
-            region=self.region
+            region=self.region,
+            access_key_id=self.s3_client.access_key_id # Pass the full key here for potential other uses
         )
         
         # Set up callbacks directly on the app

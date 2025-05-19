@@ -61,6 +61,7 @@ class S3NavigatorDisplay(App):
         name: str = "S3 Navigator",
         profile: Optional[str] = None,
         region: Optional[str] = None,
+        access_key_id: Optional[str] = None,
         path_changed_callback: Optional[Callable] = None,
         item_selected_callback: Optional[Callable] = None,
         delete_callback: Optional[Callable] = None,
@@ -70,9 +71,10 @@ class S3NavigatorDisplay(App):
         """Initialize the display.
 
         Args:
-            name: Application name
+            name: Application name (can include profile, region, key ID)
             profile: AWS profile
             region: AWS region
+            access_key_id: AWS Access Key ID
             path_changed_callback: Callback for when path changes
             item_selected_callback: Callback for when item is selected
             delete_callback: Callback for deletion action
@@ -80,9 +82,10 @@ class S3NavigatorDisplay(App):
             sort_callback: Callback for sort action
         """
         super().__init__()
-        self.app_title = name  # Store name as an attribute
+        self.app_title = name  # This now contains the formatted title
         self.profile = profile
         self.region = region
+        self.access_key_id = access_key_id
         self.path_changed_callback = path_changed_callback
         self.item_selected_callback = item_selected_callback
         self.delete_callback = delete_callback
@@ -104,17 +107,7 @@ class S3NavigatorDisplay(App):
 
         # Update Footer with profile and region
         footer = self.query_one(Footer)
-        footer_text = f"Profile: {self.profile or 'default'} | Region: {self.region or 'unknown'}"
-        # Textual's Footer displays BINDINGS automatically.
-        # To add custom text, we might need to make a custom Footer or add a Static widget.
-        # For now, let's try to update the existing footer's renderable if possible,
-        # or add a new Static widget to the footer.
-        # A simpler approach for now, given the direct `highlight_key` was removed,
-        # is to add a Static widget *above* the standard Footer for this info.
-        # However, the Footer is typically for key bindings.
-        # Let's check if Footer can have a custom renderable or if we should adjust the Header.
-        # For simplicity, let's add this to the Header's title for now, as Footer is auto-populated.
-        self.sub_title = footer_text
+        self.sub_title = f"Profile: {self.profile or 'default'} | Region: {self.region or 'unknown'}"
 
         from textual.screen import Screen
         if not self.screen_stack:
@@ -175,9 +168,12 @@ class S3NavigatorDisplay(App):
             error_item = items[0]
             error_name = error_item.get("name", "Unknown Error")
             error_message = error_item.get("message", "An unexpected error occurred.")
-            path_widget.update(f"Error: {error_name} - {error_message}")
-            # Optionally, you could add a single row to the table with the error too
-            # table.add_row("ERROR", error_name, error_message, "")
+            path_widget.update(f"{error_name}: {error_message}")
+        elif items and items[0].get("type") == "INFO":
+            info_item = items[0]
+            info_name = info_item.get("name", "Information")
+            info_message = info_item.get("message", "")
+            path_widget.update(f"{info_name}: {info_message}")
         else:
             # Update path display
             if path:
@@ -280,6 +276,7 @@ class Display:
             name="S3 Navigator",
             profile=None,  # These will be set by the navigator
             region=None,
+            access_key_id=None,
             path_changed_callback=None,
             item_selected_callback=None,
             delete_callback=None,
