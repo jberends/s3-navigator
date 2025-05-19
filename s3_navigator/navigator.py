@@ -1,9 +1,10 @@
 """Core navigator class that handles S3 browsing functionality."""
 
 from typing import Any, Dict, List, Optional
+from datetime import datetime
 
 from s3_navigator.s3_client import S3Client
-from s3_navigator.ui.display import Display, S3NavigatorDisplay
+from s3_navigator.ui.display import S3NavigatorDisplay
 
 
 class S3Navigator:
@@ -26,52 +27,41 @@ class S3Navigator:
         self.region = region
         self.serve = serve
         self.s3_client = S3Client(profile=profile, region=region)
-        self.display = Display()
-        self.current_path: List[str] = []  # [bucket, prefix1, prefix2, ...]
-        self.selected_items: List[str] = []  # List of selected item keys
-        self.current_items: List[Dict[str, Any]] = []  # Current items being displayed
-        self.sort_by = "name"  # Default sort by name
+        self.app: Optional[S3NavigatorDisplay] = None
+        self.current_path: List[str] = []
+        self.selected_items: List[str] = []
+        self.current_items: List[Dict[str, Any]] = []
+        self.sort_by = "name"
         self.sort_reverse = False
 
     def run(self) -> None:
         """Run the navigator interface."""
-        # Get Access Key ID for display
         access_key_display = self.s3_client.access_key_id
-        if access_key_display and len(access_key_display) > 10: # Truncate if too long
+        if access_key_display and len(access_key_display) > 10:
             access_key_display = f"...{access_key_display[-10:]}"
         elif not access_key_display:
             access_key_display = "Unknown"
             
         app_name = f"S3 Navigator - Profile: {self.profile or 'default'} (Region: {self.region}, KeyID: {access_key_display})"
 
-        # Create a standalone Textual app directly
-        app = S3NavigatorDisplay(
+        self.app = S3NavigatorDisplay(
+            navigator_instance=self,
             name=app_name,
             profile=self.profile,
             region=self.region,
-            access_key_id=self.s3_client.access_key_id # Pass the full key here for potential other uses
+            access_key_id=self.s3_client.access_key_id
         )
         
-        # Set up callbacks directly on the app
-        app.path_changed_callback = self._handle_path_change
-        app.item_selected_callback = self._handle_item_selection
-        app.delete_callback = self._delete_selected
-        app.refresh_callback = self._refresh
-        app.sort_callback = self._toggle_sort
+        self.app.path_changed_callback = self._handle_path_change
+        self.app.item_selected_callback = self._handle_item_selection
+        self.app.delete_callback = self._delete_selected
+        self.app.refresh_callback = self._refresh
+        self.app.sort_callback = self._toggle_sort
         
-        # Get initial data
-        self._list_buckets()
-        
-        # Initialize the app with the current data
-        app.current_items = self.current_items
-        app.current_path = self.current_path
-        app.selected_items = self.selected_items
-        
-        # Run the app
         if self.serve:
-            app.run()
+            self.app.run()
         else:
-            app.run()
+            self.app.run()
 
     def _handle_path_change(self, direction: str, item_name: Optional[str]) -> None:
         """Handle path navigation from Textual UI.
@@ -83,7 +73,6 @@ class S3Navigator:
         if direction == "up":
             self._navigate_up()
         elif direction == "in" and item_name:
-            # Find the item in current_items
             item_idx = next(
                 (
                     i
@@ -101,6 +90,7 @@ class S3Navigator:
         Args:
             idx: Index of the selected item
         """
+        if not self.app: return
         if 0 <= idx < len(self.current_items):
             item = self.current_items[idx]
             item_key = f"{'/'.join(self.current_path)}/{item['name']}".strip("/")
@@ -110,30 +100,32 @@ class S3Navigator:
             else:
                 self.selected_items.append(item_key)
 
-            self.display.update_view(
+            self.app.update_display(
                 self.current_items, self.current_path, self.selected_items
             )
 
     def _list_buckets(self) -> None:
         """List all available S3 buckets."""
+        if not self.app: return
         self.current_path = []
         buckets_or_error = self.s3_client.list_buckets()
 
         if buckets_or_error and buckets_or_error[0].get("type") == "ERROR":
-            # Handle the error case
-            self.current_items = buckets_or_error # This will be the error dict list
-        else:
-            # Proceed as normal
             self.current_items = buckets_or_error
-            self._sort_items() # Only sort if not an error
+        elif buckets_or_error and buckets_or_error[0].get("type") == "INFO":
+            self.current_items = buckets_or_error
+        else:
+            self.current_items = buckets_or_error
+            self._sort_items()
             
-        self.display.update_view(
+        self.app.update_display(
             self.current_items, self.current_path, self.selected_items
         )
 
     def _list_objects(self) -> None:
         """List objects in the current path."""
-        if not self.current_path:  # At root level
+        if not self.app: return
+        if not self.current_path:
             self._list_buckets()
             return
 
@@ -145,12 +137,14 @@ class S3Navigator:
         objects_or_error = self.s3_client.list_objects(bucket, prefix)
 
         if objects_or_error and objects_or_error[0].get("type") == "ERROR":
-            self.current_items = objects_or_error # Pass error to display
+            self.current_items = objects_or_error
+        elif objects_or_error and objects_or_error[0].get("type") == "INFO":
+            self.current_items = objects_or_error
         else:
             self.current_items = objects_or_error
-            self._sort_items() # Only sort if not an error
+            self._sort_items()
             
-        self.display.update_view(
+        self.app.update_display(
             self.current_items, self.current_path, self.selected_items
         )
 
@@ -165,29 +159,28 @@ class S3Navigator:
 
         item = self.current_items[selected_idx]
         if item["type"] == "BUCKET" or item["type"] == "DIR":
-            # Navigate into bucket or directory
             self.current_path.append(item["name"])
             self._list_objects()
         # Files can't be navigated into
 
     def _navigate_up(self) -> None:
         """Navigate up one level."""
-        if not self.current_path:  # Already at root
+        if not self.current_path:
             return
 
         self.current_path.pop()
-        if not self.current_path:  # Back to bucket list
+        if not self.current_path:
             self._list_buckets()
-        else:  # Inside a bucket
+        else:
             self._list_objects()
 
     def _delete_selected(self) -> None:
         """Delete selected items."""
+        if not self.app: return
         if not self.selected_items:
             return
 
-        # Ask for confirmation
-        if not self.display.confirm_deletion(self.selected_items):
+        if not self.app.confirm_deletion(self.selected_items):
             return
 
         for item_key in self.selected_items:
@@ -198,47 +191,49 @@ class S3Navigator:
             try:
                 self.s3_client.delete_object(bucket, key)
             except Exception as e:
-                self.display.show_error(f"Failed to delete {item_key}: {str(e)}")
+                if self.app:
+                    self.app.query_one("#path_display", Static).update(f"Delete Error: {item_key} - {str(e)}")
 
         self.selected_items = []
         self._refresh()
 
     def _refresh(self) -> None:
         """Refresh the current view."""
-        if not self.current_path:  # At root level
+        if not self.current_path:
             self._list_buckets()
-        else:  # Inside a bucket
+        else:
             self._list_objects()
 
     def _toggle_sort(self) -> None:
         """Toggle sort method."""
-        # Cycle through sort options
+        if not self.app: return
         sort_options = ["name", "size", "last_modified"]
         current_index = sort_options.index(self.sort_by)
 
-        # If last option, move to first option and flip direction
         if current_index == len(sort_options) - 1:
             self.sort_by = sort_options[0]
             self.sort_reverse = not self.sort_reverse
         else:
-            # Move to next sort option
             self.sort_by = sort_options[current_index + 1]
 
         self._sort_items()
-        self.display.update_view(
+        self.app.update_display(
             self.current_items, self.current_path, self.selected_items
         )
 
     def _sort_items(self) -> None:
         """Sort the current items based on sort criteria."""
-
         def get_sort_key(item: Dict[str, Any]) -> Any:
             if self.sort_by == "name":
                 return item["name"].lower()
             elif self.sort_by == "size":
                 return item.get("size", 0)
             elif self.sort_by == "last_modified":
-                return item.get("last_modified", "")
+                return item.get("last_modified", datetime.min if isinstance(item.get("last_modified"), datetime) else "")
             return item["name"].lower()
+        
+        actual_items = [item for item in self.current_items if item.get("type") not in ("ERROR", "INFO")]
+        error_info_items = [item for item in self.current_items if item.get("type") in ("ERROR", "INFO")]
 
-        self.current_items.sort(key=get_sort_key, reverse=self.sort_reverse)
+        actual_items.sort(key=get_sort_key, reverse=self.sort_reverse)
+        self.current_items = error_info_items + actual_items

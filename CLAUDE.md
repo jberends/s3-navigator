@@ -10,6 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Install dev dependencies: `uv pip install -e ".[dev]"`
 - Run application: `s3-navigator`
 - Run with profile: `s3-navigator --profile <profile_name> --region <region_name>`
+- List buckets (debug): `s3-navigator --list-buckets --profile <profile_name> --region <region_name>`
 - Run tests: `uv run pytest`
 - Run single test: `uv run pytest tests/test_file.py::test_function`
 - Run specific test class: `uv run pytest tests/test_file.py::TestClass`

@@ -1,12 +1,16 @@
 """Display management for the S3 Navigator interface using Textual."""
 
 from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING
 
 from textual import events
 from textual.app import App, ComposeResult
 from textual.reactive import reactive
 from textual.widgets import DataTable, Footer, Header, Static
+
+# Forward declaration for type hint
+if TYPE_CHECKING:
+    from s3_navigator.navigator import S3Navigator
 
 
 class S3NavigatorDisplay(App):
@@ -58,6 +62,7 @@ class S3NavigatorDisplay(App):
 
     def __init__(
         self,
+        navigator_instance: Optional['S3Navigator'] = None,
         name: str = "S3 Navigator",
         profile: Optional[str] = None,
         region: Optional[str] = None,
@@ -71,6 +76,7 @@ class S3NavigatorDisplay(App):
         """Initialize the display.
 
         Args:
+            navigator_instance: Instance of S3Navigator
             name: Application name (can include profile, region, key ID)
             profile: AWS profile
             region: AWS region
@@ -82,7 +88,8 @@ class S3NavigatorDisplay(App):
             sort_callback: Callback for sort action
         """
         super().__init__()
-        self.app_title = name  # This now contains the formatted title
+        self.navigator_instance = navigator_instance
+        self.app_title = name
         self.profile = profile
         self.region = region
         self.access_key_id = access_key_id
@@ -104,17 +111,11 @@ class S3NavigatorDisplay(App):
         self.title = self.app_title
         table = self.query_one("#item_table", DataTable)
         table.add_columns("Type", "Name", "Size", "Last Modified")
-
-        # Update Footer with profile and region
-        footer = self.query_one(Footer)
         self.sub_title = f"Profile: {self.profile or 'default'} | Region: {self.region or 'unknown'}"
 
-        from textual.screen import Screen
-        if not self.screen_stack:
-            class MainScreen(Screen):
-                def compose(inner_self) -> ComposeResult:
-                    yield from self.compose()
-            self.push_screen(MainScreen())
+        # Load initial data by calling back to the navigator instance
+        if self.navigator_instance:
+            self.navigator_instance._list_buckets()
 
     def on_key(self, event: events.Key) -> None:
         """Handle keyboard input."""
@@ -184,7 +185,13 @@ class S3NavigatorDisplay(App):
 
             # Update table
             for idx, item in enumerate(items):
-                item_key = f"{{"/".join(path)}}/{item['name']}".strip("/")
+                # Construct item_key correctly
+                if path: # If path is not empty, join it and add the item name
+                    item_key = f"{''.join(path)}/{item['name']}"
+                else: # If path is empty (listing buckets), item_key is just the bucket name
+                    item_key = item['name']
+                item_key = item_key.strip("/") # Ensure no leading/trailing slashes for consistency
+                
                 is_selected = item_key in selected_items
 
                 if item["type"] == "BUCKET":
@@ -245,120 +252,3 @@ class S3NavigatorDisplay(App):
         # In a real implementation, this would use a Textual modal dialog
         # For now, we'll just return True to simplify the example
         return True
-
-
-class Display:
-    """Legacy display adapter to bridge between navigator and Textual app."""
-
-    app: Optional[S3NavigatorDisplay]
-    selected_index: int
-    path: List[str]
-    items: List[Dict[str, Any]]
-    selected_items: List[str]
-
-    def __init__(self, console: Any = None) -> None:
-        """Initialize the display manager.
-
-        Args:
-            console: Rich console instance (not used, for compatibility)
-        """
-        self.console = console
-        self.app = None
-        self.selected_index = 0
-        self.path = []
-        self.items = []
-        self.selected_items = []
-
-    def setup(self) -> None:
-        """Set up the terminal for display."""
-        # Create app with appropriate callbacks
-        self.app = S3NavigatorDisplay(
-            name="S3 Navigator",
-            profile=None,  # These will be set by the navigator
-            region=None,
-            access_key_id=None,
-            path_changed_callback=None,
-            item_selected_callback=None,
-            delete_callback=None,
-            refresh_callback=None,
-            sort_callback=None,
-        )
-        
-    def run(self) -> None:
-        """Run the Textual app."""
-        if self.app:
-            # Update display with current data before running
-            self.app.update_display(self.items, self.path, self.selected_items)
-            
-            # Create a simple import we can use to create a textual screen
-            from textual.screen import Screen
-            
-            # Create a default screen and push it to the stack
-            class MainScreen(Screen):
-                def compose(self) -> ComposeResult:
-                    # Re-yield the same widgets that are in the App.compose method
-                    yield from self.app.compose()
-            
-            # Push the screen to the app's stack
-            main_screen = MainScreen()
-            self.app.push_screen(main_screen)
-            
-            # Now run the app
-            self.app.run()
-
-    def teardown(self) -> None:
-        """Restore terminal settings."""
-        pass  # Will be handled by the app
-
-    def get_key(self) -> str:
-        """Get a keypress from the user - not used with Textual."""
-        # Not needed with Textual, but kept for compatibility
-        return ""
-
-    def update_view(
-        self, items: List[Dict[str, Any]], path: List[str], selected_items: List[str]
-    ) -> None:
-        """Update the displayed view.
-
-        Args:
-            items: List of items to display
-            path: Current path
-            selected_items: List of selected item keys
-        """
-        self.items = items
-        self.path = path
-        self.selected_items = selected_items
-
-        if self.app:
-            self.app.update_display(items, path, selected_items)
-
-    def move_selection(self, direction: int) -> None:
-        """Move the current selection up or down.
-
-        Args:
-            direction: -1 for up, 1 for down
-        """
-        # This will be handled by Textual
-        pass
-
-    def confirm_deletion(self, items: List[str]) -> bool:
-        """Show deletion confirmation dialog.
-
-        Args:
-            items: List of items to delete
-
-        Returns:
-            True if confirmed, False otherwise
-        """
-        if self.app:
-            return self.app.confirm_deletion(items)
-        return False
-
-    def show_error(self, message: str) -> None:
-        """Show an error message to the user.
-
-        Args:
-            message: Error message to display
-        """
-        # Would be better implemented with a Textual notification
-        pass
