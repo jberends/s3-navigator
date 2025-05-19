@@ -158,7 +158,9 @@ class S3Navigator:
             return
 
         item = self.current_items[selected_idx]
-        if item["type"] == "BUCKET" or item["type"] == "DIR":
+        if item["name"] == "..":
+            self._navigate_up()
+        elif item["type"] == "BUCKET" or item["type"] == "DIR":
             self.current_path.append(item["name"])
             self._list_objects()
         # Files can't be navigated into
