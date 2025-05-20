@@ -189,6 +189,26 @@ class S3Client:
 
         return total_size
 
+    def collect_objects_for_deletion(self, bucket: str, prefix: str) -> tuple[list[str], int]:
+        """Collect all objects under a prefix (directory) and return their keys and total size."""
+        paginator = self.client.get_paginator("list_objects_v2")
+        page_iterator = paginator.paginate(Bucket=bucket, Prefix=prefix)
+        keys = []
+        total_size = 0
+        for page in page_iterator:
+            for obj in page.get("Contents", []):
+                keys.append(obj["Key"])
+                total_size += obj["Size"]
+        return keys, total_size
+
+    def get_object_metadata(self, bucket: str, key: str) -> dict:
+        """Get metadata for a single object."""
+        try:
+            response = self.client.head_object(Bucket=bucket, Key=key)
+            return {"Size": response.get("ContentLength", 0)}
+        except Exception:
+            return {}
+
     def delete_object(self, bucket: str, key: str, log_callback=None) -> None:
         """Delete an object from S3. If key ends with '/', delete all objects with this prefix (recursive)."""
         if key.endswith("/") or key == "":

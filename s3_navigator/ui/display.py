@@ -210,21 +210,14 @@ class S3NavigatorDisplay(App):
         else:
             self.add_log_message("Calculate all sizes callback not configured.")
 
-    def show_confirm_delete_dialog(self, items_to_delete: List[str], on_confirm_callback: Callable[[], None]) -> None:
-        """Shows a modal dialog to confirm deletion.
-
-        Args:
-            items_to_delete: A list of item names (keys) to be deleted.
-            on_confirm_callback: The function to call if deletion is confirmed.
-        """
+    def show_confirm_delete_dialog(self, items_to_delete: List[str], on_confirm_callback: Callable[[], None], total_objects: int = None, total_size: int = None) -> None:
+        """Shows a modal dialog to confirm deletion."""
         item_count = len(items_to_delete)
-        if item_count == 0: # Should be caught by navigator, but as a safeguard
+        if item_count == 0:
             self.add_log_message("No items specified for deletion confirmation.")
             return
 
         message = f"Are you sure you want to delete {item_count} selected item(s)?\n\n"
-        
-        # List a few full paths for clarity
         max_items_to_list = 5
         for i, item_key in enumerate(items_to_delete):
             if i < max_items_to_list:
@@ -232,9 +225,12 @@ class S3NavigatorDisplay(App):
             else:
                 message += f"...and {item_count - max_items_to_list} more item(s).\n"
                 break
-        message += "\nNote: Directory/bucket sizes are calculated on demand ('c' or 'C') "
-        message += "and are not summed here. This action is irreversible."
-        
+        message += "\nThis action is irreversible."
+
+        # Use provided total_objects and total_size if available
+        num_items = total_objects if total_objects is not None else item_count
+        total_size_str = self._format_size(total_size) if total_size is not None else "N/A"
+
         def dialog_callback(confirmed: bool) -> None:
             if confirmed:
                 self.add_log_message("Deletion confirmed by user.")
@@ -242,7 +238,7 @@ class S3NavigatorDisplay(App):
             else:
                 self.add_log_message("Deletion cancelled by user.")
 
-        self.push_screen(ConfirmDeleteScreen(message=message, num_items=item_count, total_size=self._format_size(self.calculate_all_sizes_callback() if self.calculate_all_sizes_callback else 0)), dialog_callback)
+        self.push_screen(ConfirmDeleteScreen(message=message, num_items=num_items, total_size=total_size_str), dialog_callback)
 
     def add_log_message(self, message: str) -> None:
         """Add a message to the log window."""
@@ -351,8 +347,8 @@ class S3NavigatorDisplay(App):
         Returns:
             Formatted size string
         """
-        if size_bytes == -1:
-            return "[pending]"
+        if size_bytes is None or size_bytes == -1:
+            return "N/A"
         if size_bytes == 0:
             return "0 B"
 

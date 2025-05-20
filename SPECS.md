@@ -149,12 +149,14 @@ S3 Navigator is a command-line tool that provides a Norton Commander-style inter
 - When backspace is pressed and items are selected, a modal dialog appears centered on the screen with:
   - **Title:** "Confirm Deletion"
   - **Description:** Warning that this action is irreversible.
-  - **Summary:** Number of items to be deleted and their total size (if available, otherwise "N/A").
+  - **Summary:** Number of objects to be deleted and their total size (calculated by collecting all underlying objects recursively; if unavailable, show "N/A").
   - **Buttons:** "Yes, Delete" and "No, Cancel". These can be triggered by pressing y/Y or n/N, respectively.
   - The modal cannot be dismissed by clicking outside or pressing Escape; only explicit confirmation/cancellation.
 - If no items are selected, a log message is shown instead of the dialog.
 
 ### Recursive Folder Deletion
 
-- When deleting a directory, all objects with that prefix are deleted (recursive delete).
+- When deleting a directory, all underlying objects with that prefix are first collected to calculate the total size and number of objects.
+- The confirmation dialog presents this information before deletion.
+- When 'Yes, Delete' is confirmed, all objects with the prefix are deleted (not the prefixes themselves, as they do not exist as objects).
 - The log window shows progress for each object or batch deleted.

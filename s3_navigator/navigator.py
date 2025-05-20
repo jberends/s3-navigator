@@ -209,10 +209,34 @@ class S3Navigator:
             self.log_to_display("No items selected to delete.")
             return
         
-        self.log_to_display(f"Requesting UI confirmation to delete {len(self.selected_items)} item(s)...")
+        # Collect all objects and total size for each selected item
+        items_info = []
+        for item_key in self.selected_items:
+            parts = item_key.split("/")
+            bucket = parts[0]
+            key = "/".join(parts[1:]) if len(parts) > 1 else ""
+            if key.endswith("/") or key == "":
+                # Directory: collect all objects under prefix
+                object_keys, total_size = self.s3_client.collect_objects_for_deletion(bucket, key)
+                items_info.append({
+                    "item_key": item_key,
+                    "object_count": len(object_keys),
+                    "total_size": total_size
+                })
+            else:
+                # Single object
+                obj = self.s3_client.get_object_metadata(bucket, key)
+                items_info.append({
+                    "item_key": item_key,
+                    "object_count": 1,
+                    "total_size": obj.get("Size", 0) if obj else 0
+                })
+        total_objects = sum(info["object_count"] for info in items_info)
+        total_size = sum(info["total_size"] for info in items_info)
+        
+        self.log_to_display(f"Requesting UI confirmation to delete {total_objects} object(s), total size: {self.app._format_size(total_size) if self.app else total_size} ...")
         # The UI will call _execute_confirmed_delete if user confirms
-        self.app.show_confirm_delete_dialog(list(self.selected_items), self._execute_confirmed_delete)
-
+        self.app.show_confirm_delete_dialog(list(self.selected_items), self._execute_confirmed_delete, total_objects, total_size)
 
     def _execute_confirmed_delete(self) -> None:
         """Execute deletion of selected items after UI confirmation."""
@@ -224,23 +248,19 @@ class S3Navigator:
             self.log_to_display("Deletion confirmed, but no items are currently selected. Aborting.")
             return
 
-        self.log_to_display(f"Deletion confirmed. Proceeding to delete {len(self.selected_items)} items: {', '.join(self.selected_items)}")
+        self.log_to_display(f"Deletion confirmed. Proceeding to delete selected items...")
         
-        # Keep a copy, as self.selected_items will be cleared
         items_to_delete_copy = list(self.selected_items) 
-
         for item_key in items_to_delete_copy:
             parts = item_key.split("/")
             bucket = parts[0]
             key = "/".join(parts[1:]) if len(parts) > 1 else ""
-            self.log_to_display(f"Deleting s3://{bucket}/{key}")
             try:
-                self.s3_client.delete_object(bucket, key)
+                self.s3_client.delete_object(bucket, key, log_callback=self.log_to_display)
                 self.log_to_display(f"Successfully deleted s3://{bucket}/{key}")
             except Exception as e:
                 error_message = f"Delete Error: {item_key} - {str(e)}"
                 self.log_to_display(error_message)
-        
         self.selected_items = [] # Clear selection after attempting deletion
         self.log_to_display("Deletion process finished, refreshing view.")
         self._refresh()
