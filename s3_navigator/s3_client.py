@@ -189,32 +189,24 @@ class S3Client:
 
         return total_size
 
-    def delete_object(self, bucket: str, key: str) -> None:
-        """Delete an object from S3.
-
-        Args:
-            bucket: The name of the S3 bucket
-            key: The object key to delete
-        """
-        if key.endswith("/"):
+    def delete_object(self, bucket: str, key: str, log_callback=None) -> None:
+        """Delete an object from S3. If key ends with '/', delete all objects with this prefix (recursive)."""
+        if key.endswith("/") or key == "":
             # It's a directory, delete all objects with this prefix
-            self._delete_directory(bucket, key)
+            self._delete_directory(bucket, key, log_callback=log_callback)
         else:
             # It's a single object
             self.client.delete_object(Bucket=bucket, Key=key)
+            if log_callback:
+                log_callback(f"Deleted object: s3://{bucket}/{key}")
 
-    def _delete_directory(self, bucket: str, prefix: str) -> None:
-        """Delete all objects with a specific prefix (directory).
-
-        Args:
-            bucket: The name of the S3 bucket
-            prefix: The directory prefix to delete
-        """
-        # List all objects with the prefix
+    def _delete_directory(self, bucket: str, prefix: str, log_callback=None) -> None:
+        """Delete all objects with a specific prefix (directory)."""
         paginator = self.client.get_paginator("list_objects_v2")
         page_iterator = paginator.paginate(Bucket=bucket, Prefix=prefix)
 
         delete_list = []
+        total_deleted = 0
         for page in page_iterator:
             if "Contents" in page:
                 for obj in page["Contents"]:
@@ -225,8 +217,16 @@ class S3Client:
                         self.client.delete_objects(
                             Bucket=bucket, Delete={"Objects": delete_list}
                         )
+                        total_deleted += len(delete_list)
+                        if log_callback:
+                            log_callback(f"Deleted batch of {len(delete_list)} objects from s3://{bucket}/{prefix}")
                         delete_list = []
 
         # Delete any remaining objects
         if delete_list:
             self.client.delete_objects(Bucket=bucket, Delete={"Objects": delete_list})
+            total_deleted += len(delete_list)
+            if log_callback:
+                log_callback(f"Deleted final batch of {len(delete_list)} objects from s3://{bucket}/{prefix}")
+        if log_callback:
+            log_callback(f"Total deleted from s3://{bucket}/{prefix}: {total_deleted} objects.")

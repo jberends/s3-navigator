@@ -242,7 +242,7 @@ class S3NavigatorDisplay(App):
             else:
                 self.add_log_message("Deletion cancelled by user.")
 
-        self.push_screen(ConfirmDeleteScreen(message=message), dialog_callback)
+        self.push_screen(ConfirmDeleteScreen(message=message, num_items=item_count, total_size=self._format_size(self.calculate_all_sizes_callback() if self.calculate_all_sizes_callback else 0)), dialog_callback)
 
     def add_log_message(self, message: str) -> None:
         """Add a message to the log window."""
@@ -381,13 +381,21 @@ class S3NavigatorDisplay(App):
 class ConfirmDeleteScreen(ModalScreen[bool]):
     """Modal dialog to confirm deletion of items."""
 
-    def __init__(self, message: str, name: str | None = None, id: str | None = None, classes: str | None = None):
+    def __init__(self, message: str, title: str = "Confirm Deletion", num_items: int = 0, total_size: str = "N/A", name: str | None = None, id: str | None = None, classes: str | None = None):
         super().__init__(name, id, classes)
+        self.title_text = title
         self.message = message
+        self.num_items = num_items
+        self.total_size = total_size
+        self._confirmed = False
 
     def compose(self) -> ComposeResult:
         yield Grid(
-            Static(self.message, id="dialog_message"),
+            Static(f"[b]{self.title_text}[/b]", id="dialog_title"),
+            Static(f"[red]Warning: This action is irreversible![/red]", id="dialog_warning"),
+            Static(f"{self.message}", id="dialog_message"),
+            Static(f"[b]Number of items:[/b] {self.num_items}", id="dialog_count"),
+            Static(f"[b]Total size:[/b] {self.total_size}", id="dialog_size"),
             Button("Yes, Delete", variant="error", id="delete_yes"),
             Button("No, Cancel", variant="primary", id="delete_no"),
             id="dialog_confirm_delete"
@@ -395,6 +403,23 @@ class ConfirmDeleteScreen(ModalScreen[bool]):
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "delete_yes":
+            self._confirmed = True
             self.dismiss(True)
         elif event.button.id == "delete_no":
+            self._confirmed = False
             self.dismiss(False)
+
+    def on_key(self, event: events.Key) -> None:
+        if event.key in ("y", "Y"):
+            self._confirmed = True
+            self.dismiss(True)
+        elif event.key in ("n", "N"):
+            self._confirmed = False
+            self.dismiss(False)
+        # Prevent escape or other keys from dismissing
+        elif event.key == "escape":
+            event.prevent_default()
+
+    def can_dismiss(self) -> bool:
+        # Prevent dismiss by clicking outside or pressing escape
+        return False
