@@ -81,10 +81,10 @@ S3 Navigator is a command-line tool that provides a Norton Commander-style inter
 | Key | Function |
 |-----|----------|
 | ↑/↓ | Move selection up/down |
-| right arrow /Enter | Open selected bucket/directory |
-| left arrow | Navigate to parent directory |
+| Enter | Open selected bucket/directory |
+| Backspace (macOS) / Left Arrow | Navigate to parent directory |
 | Space | add to selection / deselect |
-| backspace | delete (with confirmation dialog) |
+| backspace | If items selected, show confirmation dialog to delete. If no items selected, log message. |
 | q | Quit the application |
 | r | Refresh current view |
 | s | sort tree |

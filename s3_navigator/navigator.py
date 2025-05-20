@@ -60,7 +60,7 @@ class S3Navigator:
         
         self.app.path_changed_callback = self._handle_path_change
         self.app.item_selected_callback = self._handle_item_selection
-        self.app.delete_callback = self._delete_selected
+        self.app.delete_callback = self.request_delete_confirmation
         self.app.refresh_callback = self._refresh
         self.app.sort_callback = self._toggle_sort
         self.app.calculate_size_callback = self._handle_calculate_size_request
@@ -200,17 +200,36 @@ class S3Navigator:
         else:
             self._list_objects()
 
-    def _delete_selected(self) -> None:
-        """Delete selected items."""
-        if not self.app: return
+    def request_delete_confirmation(self) -> None:
+        """Requests delete confirmation from the UI if items are selected."""
+        if not self.app:
+            return
+        
         if not self.selected_items:
+            self.log_to_display("No items selected to delete.")
+            return
+        
+        self.log_to_display(f"Requesting UI confirmation to delete {len(self.selected_items)} item(s)...")
+        # The UI will call _execute_confirmed_delete if user confirms
+        self.app.show_confirm_delete_dialog(list(self.selected_items), self._execute_confirmed_delete)
+
+
+    def _execute_confirmed_delete(self) -> None:
+        """Execute deletion of selected items after UI confirmation."""
+        if not self.app: 
+            return # Should not happen if dialog was shown
+        
+        # Double check selected_items, though dialog implies they were there
+        if not self.selected_items:
+            self.log_to_display("Deletion confirmed, but no items are currently selected. Aborting.")
             return
 
-        if not self.app.confirm_deletion(self.selected_items):
-            return
+        self.log_to_display(f"Deletion confirmed. Proceeding to delete {len(self.selected_items)} items: {', '.join(self.selected_items)}")
+        
+        # Keep a copy, as self.selected_items will be cleared
+        items_to_delete_copy = list(self.selected_items) 
 
-        self.log_to_display(f"Attempting to delete {len(self.selected_items)} items: {', '.join(self.selected_items)}")
-        for item_key in self.selected_items:
+        for item_key in items_to_delete_copy:
             parts = item_key.split("/")
             bucket = parts[0]
             key = "/".join(parts[1:]) if len(parts) > 1 else ""
@@ -221,11 +240,8 @@ class S3Navigator:
             except Exception as e:
                 error_message = f"Delete Error: {item_key} - {str(e)}"
                 self.log_to_display(error_message)
-                if self.app:
-                    # self.app.query_one("#path_display", Static).update(error_message) # Keep or remove this line based on desired UX
-                    pass # Log is now primary for this error
-
-        self.selected_items = []
+        
+        self.selected_items = [] # Clear selection after attempting deletion
         self.log_to_display("Deletion process finished, refreshing view.")
         self._refresh()
 
@@ -342,54 +358,84 @@ class S3Navigator:
         if not self.app:
             return
 
-        self.log_to_display("Starting batch size calculation for all visible pending items...")
-        items_to_calculate_count = sum(1 for item_data in self.current_items 
-                                       if item_data.get("type") in ["BUCKET", "DIR"] and item_data.get("size") == -1)
+        self.log_to_display("Starting batch size calculation for all visible pending items...") # Log 1 (from Navigator)
         
-        if items_to_calculate_count == 0:
+        items_to_process = [
+            (i, item_data) for i, item_data in enumerate(self.current_items)
+            if item_data.get("type") in ["BUCKET", "DIR"] and item_data.get("size") == -1
+        ]
+        
+        if not items_to_process:
             self.log_to_display("No items found requiring size calculation.")
             return
 
-        self.log_to_display(f"Found {items_to_calculate_count} items to calculate.")
+        self.log_to_display(f"Found {len(items_to_process)} items to calculate. Scheduling loop...")
+        
+        # Schedule the actual loop to allow current log messages to render
+        self.app.call_later(self._execute_batch_size_calculation_loop, items_to_process)
+
+    def _execute_batch_size_calculation_loop(self, items_to_process: List[tuple[int, Dict[str, Any]]]) -> None:
+        """Execute the loop for batch calculating directory/bucket sizes."""
+        if not self.app: # Re-check app as this is called later
+            print("Error: App context lost before executing batch size calculation loop.") # Or log if app still exists for logging
+            return
+
+        self.log_to_display(f"Executing batch calculation loop for {len(items_to_process)} items.")
         calculated_count = 0
+        total_to_calculate = len(items_to_process)
 
-        for i, item_data in enumerate(self.current_items):
-            if item_data.get("type") in ["BUCKET", "DIR"] and item_data.get("size") == -1:
-                item_name = item_data["name"]
-                item_type = item_data["type"]
-                self.log_to_display(f"Calculating size for {item_type}: {item_name} ({calculated_count + 1}/{items_to_calculate_count})...")
-                
-                bucket_name = ""
+        for i, item_data in items_to_process:
+            # Ensure item_data is the dictionary, and i is its original index in self.current_items
+            item_name = item_data["name"]
+            item_type = item_data["type"]
+            
+            self.log_to_display(f"Processing {item_type}: {item_name} ({calculated_count + 1}/{total_to_calculate})...")
+            
+            bucket_name = ""
+            object_prefix = ""
+
+            if item_type == "BUCKET":
+                bucket_name = item_name
                 object_prefix = ""
-
-                if item_type == "BUCKET":
-                    bucket_name = item_name
-                    object_prefix = ""
-                elif item_type == "DIR":
-                    if not self.current_path:
-                        self.log_to_display(f"Error: DIR {item_name} selected but current_path is empty. Skipping.")
-                        continue
-                    bucket_name = self.current_path[0]
-                    dir_path_parts = self.current_path[1:] + [item_name]
-                    object_prefix = "/".join(dir_path_parts) + "/"
-                
-                try:
-                    calculated_size = self.s3_client._calculate_directory_size(bucket_name, object_prefix)
+            elif item_type == "DIR":
+                if not self.current_path:
+                    self.log_to_display(f"Error: DIR {item_name} found but current_path is empty. Skipping.")
+                    continue
+                bucket_name = self.current_path[0]
+                dir_path_parts = self.current_path[1:] + [item_name]
+                object_prefix = "/".join(dir_path_parts) + "/"
+            
+            try:
+                calculated_size = self.s3_client._calculate_directory_size(bucket_name, object_prefix)
+                # Update the original self.current_items list using the original index i
+                if 0 <= i < len(self.current_items) and self.current_items[i]["name"] == item_name:
                     self.current_items[i]["size"] = calculated_size
                     self.log_to_display(f"Size for {item_name}: {self.app._format_size(calculated_size) if self.app else calculated_size}")
-                    calculated_count += 1
-                except Exception as e:
-                    self.log_to_display(f"Error calculating size for {item_name}: {e}")
+                else:
+                    self.log_to_display(f"Error updating size for {item_name}: item not found at original index or name mismatch.")
+                calculated_count += 1
+            except Exception as e:
+                self.log_to_display(f"Error calculating size for {item_name}: {e}")
+                if 0 <= i < len(self.current_items) and self.current_items[i]["name"] == item_name:
                     self.current_items[i]["size"] = -1 # Keep as pending or mark error
 
-                # Refresh display after each calculation to show progress
-                if self.app:
-                    self.app.update_display(
-                        self.current_items,
-                        self.current_path,
-                        self.selected_items,
-                        self.sort_by,
-                        self.sort_reverse
-                    )
+            # Refresh display after each calculation to show progress if possible, though UI is blocked
+            if self.app:
+                self.app.update_display(
+                    self.current_items,
+                    self.current_path,
+                    self.selected_items,
+                    self.sort_by,
+                    self.sort_reverse
+                )
         
-        self.log_to_display("Batch size calculation finished.")
+        self.log_to_display(f"Batch size calculation finished. Processed {calculated_count}/{total_to_calculate} items.")
+        # Final refresh might be needed if any errors occurred and display wasn't updated for last item
+        if self.app:
+            self.app.update_display(
+                self.current_items,
+                self.current_path,
+                self.selected_items,
+                self.sort_by,
+                self.sort_reverse
+            )

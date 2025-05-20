@@ -5,8 +5,10 @@ from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING
 
 from textual import events
 from textual.app import App, ComposeResult
+from textual.containers import Grid
 from textual.reactive import reactive
-from textual.widgets import DataTable, Footer, Header, Static, Log
+from textual.screen import ModalScreen
+from textual.widgets import Button, DataTable, Footer, Header, Static, Log
 
 # Forward declaration for type hint
 if TYPE_CHECKING:
@@ -71,8 +73,6 @@ class S3NavigatorDisplay(App):
         ("r", "refresh", "Refresh"),
         ("s", "sort", "Sort"),
         ("space", "select", "Select"),
-        ("backspace", "delete", "Delete"),
-        ("right", "open", "Open"),
         ("left", "up", "Up"),
         ("c", "calculate_size", "Calc. Size"),
         ("C", "calculate_all_sizes", "Calc. All Sizes"),
@@ -148,30 +148,41 @@ class S3NavigatorDisplay(App):
         key = event.key
 
         if key == "q":
+            self.add_log_message("Quit action initiated.")
             self.exit()
         elif key == "r" and self.refresh_callback:
+            self.add_log_message("Refresh action initiated...")
             self.refresh_callback()
         elif key == "s" and self.sort_callback:
+            self.add_log_message("Sort action initiated...")
             self.sort_callback()
-        elif key == "backspace" and self.delete_callback:
-            self.delete_callback()
         elif key == "space" and self.item_selected_callback:
             table = self.query_one("#item_table", DataTable)
             if table.cursor_row is not None:
+                self.add_log_message(f"Select action for row {table.cursor_row}...")
                 self.item_selected_callback(table.cursor_row)
-        elif key == "right" or key == "enter":
-            # Navigate into selected item
+                table.action_cursor_down()
+        elif key == "enter":
             table = self.query_one("#item_table", DataTable)
             if table.cursor_row is not None and self.path_changed_callback:
                 item_idx = table.cursor_row
                 if item_idx < len(self.current_items):
                     item = self.current_items[item_idx]
                     if item["type"] == "BUCKET" or item["type"] == "DIR":
+                        self.add_log_message(f"Navigate into {item['type']} '{item['name']}' initiated (Enter)...")
                         self.path_changed_callback("in", item["name"])
         elif key == "left":
-            # Navigate up one level
             if self.path_changed_callback:
+                self.add_log_message("Navigate up initiated (Left Arrow)...")
                 self.path_changed_callback("up", None)
+        elif key == "right":
+            table = self.query_one("#item_table", DataTable)
+            if self.screen.focused and (self.screen.focused == table or table.is_ancestor_of(self.screen.focused)):
+                event.prevent_default()
+                self.add_log_message("Right arrow navigation in table disabled.")
+        elif key == "backspace" and self.delete_callback:
+            self.add_log_message("Delete action initiated...")
+            self.delete_callback()
 
     def action_calculate_size(self) -> None:
         """Action to trigger size calculation for the selected item."""
@@ -195,9 +206,43 @@ class S3NavigatorDisplay(App):
         """Action to trigger size calculation for all visible pending items."""
         if self.calculate_all_sizes_callback:
             self.add_log_message("Requesting calculation for ALL visible pending item sizes...")
-            self.calculate_all_sizes_callback()
+            self.calculate_all_sizes_callback() 
         else:
             self.add_log_message("Calculate all sizes callback not configured.")
+
+    def show_confirm_delete_dialog(self, items_to_delete: List[str], on_confirm_callback: Callable[[], None]) -> None:
+        """Shows a modal dialog to confirm deletion.
+
+        Args:
+            items_to_delete: A list of item names (keys) to be deleted.
+            on_confirm_callback: The function to call if deletion is confirmed.
+        """
+        item_count = len(items_to_delete)
+        if item_count == 0: # Should be caught by navigator, but as a safeguard
+            self.add_log_message("No items specified for deletion confirmation.")
+            return
+
+        message = f"Are you sure you want to delete {item_count} selected item(s)?\n\n"
+        
+        # List a few full paths for clarity
+        max_items_to_list = 5
+        for i, item_key in enumerate(items_to_delete):
+            if i < max_items_to_list:
+                message += f"- {item_key}\n"
+            else:
+                message += f"...and {item_count - max_items_to_list} more item(s).\n"
+                break
+        message += "\nNote: Directory/bucket sizes are calculated on demand ('c' or 'C') "
+        message += "and are not summed here. This action is irreversible."
+        
+        def dialog_callback(confirmed: bool) -> None:
+            if confirmed:
+                self.add_log_message("Deletion confirmed by user.")
+                on_confirm_callback()
+            else:
+                self.add_log_message("Deletion cancelled by user.")
+
+        self.push_screen(ConfirmDeleteScreen(message=message), dialog_callback)
 
     def add_log_message(self, message: str) -> None:
         """Add a message to the log window."""
@@ -273,25 +318,29 @@ class S3NavigatorDisplay(App):
             for idx, item in enumerate(items):
                 # Construct item_key correctly
                 if path: # If path is not empty, join it and add the item name
-                    item_key = f"{''.join(path)}/{item['name']}"
+                    item_key = f"{"/".join(path)}/{item['name']}"
                 else: # If path is empty (listing buckets), item_key is just the bucket name
                     item_key = item['name']
                 item_key = item_key.strip("/") # Ensure no leading/trailing slashes for consistency
                 
                 is_selected = item_key in selected_items
 
+                type_display: str
                 if item["type"] == "BUCKET":
                     type_icon = "🪣"
                 elif item["type"] == "DIR":
                     type_icon = "📁"
                 else:
                     type_icon = "📄"
+                
+                selection_marker = "*" if is_selected else " "
+                type_display = f"{selection_marker} {type_icon}"
+                name_display = item['name'] # Name is now just the item name
 
                 size_str = self._format_size(item["size"])
                 last_modified = self._format_date(item["last_modified"])
-                name_display = f"{'* ' if is_selected else '  '}{item['name']}"
-
-                table.add_row(type_icon, name_display, size_str, last_modified)
+                
+                table.add_row(type_display, name_display, size_str, last_modified)
 
     def _format_size(self, size_bytes: int) -> str:
         """Format size in human-readable format.
@@ -328,15 +377,24 @@ class S3NavigatorDisplay(App):
         """
         return date.strftime("%Y-%m-%d %H:%M")
 
-    def confirm_deletion(self, items: List[str]) -> bool:
-        """Show deletion confirmation dialog.
 
-        Args:
-            items: List of items to delete
+class ConfirmDeleteScreen(ModalScreen[bool]):
+    """Modal dialog to confirm deletion of items."""
 
-        Returns:
-            True if confirmed, False otherwise
-        """
-        # In a real implementation, this would use a Textual modal dialog
-        # For now, we'll just return True to simplify the example
-        return True
+    def __init__(self, message: str, name: str | None = None, id: str | None = None, classes: str | None = None):
+        super().__init__(name, id, classes)
+        self.message = message
+
+    def compose(self) -> ComposeResult:
+        yield Grid(
+            Static(self.message, id="dialog_message"),
+            Button("Yes, Delete", variant="error", id="delete_yes"),
+            Button("No, Cancel", variant="primary", id="delete_no"),
+            id="dialog_confirm_delete"
+        )
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "delete_yes":
+            self.dismiss(True)
+        elif event.button.id == "delete_no":
+            self.dismiss(False)
