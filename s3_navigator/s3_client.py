@@ -122,9 +122,10 @@ class S3Client:
                             {
                                 "name": dir_name,
                                 "type": "DIR",
-                                "size": self._calculate_directory_size(
-                                    bucket, common_prefix["Prefix"]
-                                ),
+                                # "size": self._calculate_directory_size(
+                                #     bucket, common_prefix["Prefix"]
+                                # ),
+                                "size": 0, # Temporarily set to 0 for performance
                                 "last_modified": datetime.now(timezone.utc),  # Directories don't have a last modified time
                             }
                         )

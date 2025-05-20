@@ -120,7 +120,7 @@ class S3NavigatorDisplay(App):
         yield Header(show_clock=True)
         yield Static("", classes="path", id="path_display")
         yield DataTable(id="item_table", classes="s3-table")
-        yield Log(id="log_window", highlight=True, markup=True)
+        yield Log(id="log_window", highlight=True)
         yield Footer()
 
     def on_mount(self) -> None:
