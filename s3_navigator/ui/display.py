@@ -6,7 +6,7 @@ from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING
 from textual import events
 from textual.app import App, ComposeResult
 from textual.reactive import reactive
-from textual.widgets import DataTable, Footer, Header, Static
+from textual.widgets import DataTable, Footer, Header, Static, Log
 
 # Forward declaration for type hint
 if TYPE_CHECKING:
@@ -43,6 +43,14 @@ class S3NavigatorDisplay(App):
     .s3-table {
         height: 1fr;
         border: round $accent;
+    }
+
+    #log_window {
+        height: 5;
+        border: round $primary;
+        background: $panel;
+        padding: 0 1;
+        dock: bottom; /* Docks above the footer which also docks bottom */
     }
     """
 
@@ -112,6 +120,7 @@ class S3NavigatorDisplay(App):
         yield Header(show_clock=True)
         yield Static("", classes="path", id="path_display")
         yield DataTable(id="item_table", classes="s3-table")
+        yield Log(id="log_window", highlight=True, markup=True)
         yield Footer()
 
     def on_mount(self) -> None:
@@ -155,6 +164,11 @@ class S3NavigatorDisplay(App):
             # Navigate up one level
             if self.path_changed_callback:
                 self.path_changed_callback("up", None)
+
+    def add_log_message(self, message: str) -> None:
+        """Add a message to the log window."""
+        log_widget = self.query_one("#log_window", Log)
+        log_widget.write_line(f"[{datetime.now().strftime('%H:%M:%S')}] {message}")
 
     def update_display(
         self, 

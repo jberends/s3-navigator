@@ -151,3 +151,82 @@ class TestS3Client(unittest.TestCase):
             self.assertEqual(len(folder_objects), 2)
             self.assertEqual(folder_objects[0]["name"], "folder1")
             self.assertEqual(folder_objects[1]["name"], "folder2")
+
+    def test_calculate_directory_size(self) -> None:
+        """Test calculating the total size of objects within a directory prefix."""
+        bucket_name = "test-bucket"
+        directory_prefix = "test-dir/"
+
+        # Test case 1: Empty directory
+        list_objects_response_empty = {"Contents": []}
+        self.stubber.add_response(
+            "list_objects_v2",
+            list_objects_response_empty,
+            {"Bucket": bucket_name, "Prefix": directory_prefix},
+        )
+        self.stubber.activate() # Activate before calling the method under test
+        size_empty = self.client._calculate_directory_size(bucket_name, directory_prefix)
+        self.assertEqual(size_empty, 0)
+        self.stubber.assert_no_pending_responses()
+        self.stubber.deactivate() 
+
+        # Test case 2: Directory with a few objects (single page)
+        self.stubber.add_response( # Add response before activating for this specific case
+            "list_objects_v2",
+            {
+                "Contents": [
+                    {"Key": "test-dir/file1.txt", "Size": 100},
+                    {"Key": "test-dir/file2.txt", "Size": 200},
+                ]
+            },
+            {"Bucket": bucket_name, "Prefix": directory_prefix},
+        )
+        self.stubber.activate()
+        size_single_page = self.client._calculate_directory_size(bucket_name, directory_prefix)
+        self.assertEqual(size_single_page, 300)
+        self.stubber.assert_no_pending_responses()
+        self.stubber.deactivate()
+
+        # Test case 3: Directory with objects requiring pagination
+        list_objects_response_page1 = {
+            "Contents": [{"Key": f"test-dir/file{i}.txt", "Size": 10} for i in range(10)], # 100 bytes
+            "IsTruncated": True,
+            "NextContinuationToken": "nexttoken",
+        }
+        list_objects_response_page2 = {
+            "Contents": [{"Key": f"test-dir/anotherfile{i}.txt", "Size": 5} for i in range(5)], # 25 bytes
+        }
+        self.stubber.add_response(
+            "list_objects_v2",
+            list_objects_response_page1,
+            {"Bucket": bucket_name, "Prefix": directory_prefix},
+        )
+        self.stubber.add_response( # For the paginated call
+            "list_objects_v2",
+            list_objects_response_page2,
+            {"Bucket": bucket_name, "Prefix": directory_prefix, "ContinuationToken": "nexttoken"},
+        )
+        self.stubber.activate()
+        size_paginated = self.client._calculate_directory_size(bucket_name, directory_prefix)
+        self.assertEqual(size_paginated, 125) # 100 + 25
+        self.stubber.assert_no_pending_responses()
+        self.stubber.deactivate()
+
+        # Test case 4: Directory with nested structure (should sum all)
+        list_objects_response_nested = {
+            "Contents": [
+                {"Key": "test-dir/file1.txt", "Size": 100},
+                {"Key": "test-dir/subdir/file2.txt", "Size": 50},
+                {"Key": "test-dir/another-subdir/deepfile.dat", "Size": 25},
+            ]
+        }
+        self.stubber.add_response(
+            "list_objects_v2",
+            list_objects_response_nested,
+            {"Bucket": bucket_name, "Prefix": directory_prefix},
+        )
+        self.stubber.activate()
+        size_nested = self.client._calculate_directory_size(bucket_name, directory_prefix)
+        self.assertEqual(size_nested, 175) # 100 + 50 + 25
+        self.stubber.assert_no_pending_responses()
+        self.stubber.deactivate()

@@ -34,8 +34,14 @@ class S3Navigator:
         self.sort_by = "name"
         self.sort_reverse = False
 
+    def log_to_display(self, message: str) -> None:
+        """Log a message to the Textual display if available."""
+        if self.app:
+            self.app.add_log_message(message)
+
     def run(self) -> None:
         """Run the navigator interface."""
+        self.log_to_display("Initializing S3 Navigator...")
         access_key_display = self.s3_client.access_key_id
         if access_key_display and len(access_key_display) > 10:
             access_key_display = f"...{access_key_display[-10:]}"
@@ -108,16 +114,20 @@ class S3Navigator:
     def _list_buckets(self) -> None:
         """List all available S3 buckets."""
         if not self.app: return
+        self.log_to_display("Listing buckets...")
         self.current_path = []
         buckets_or_error = self.s3_client.list_buckets()
 
         if buckets_or_error and buckets_or_error[0].get("type") == "ERROR":
             self.current_items = buckets_or_error
+            self.log_to_display(f"Error listing buckets: {buckets_or_error[0].get('name')}")
         elif buckets_or_error and buckets_or_error[0].get("type") == "INFO":
             self.current_items = buckets_or_error
+            self.log_to_display(f"Info listing buckets: {buckets_or_error[0].get('name')}")
         else:
             self.current_items = buckets_or_error
             self._sort_items()
+            self.log_to_display(f"Found {len(self.current_items)} buckets.")
             
         self.app.update_display(
             self.current_items, self.current_path, self.selected_items,
@@ -128,6 +138,7 @@ class S3Navigator:
         """List objects in the current path."""
         if not self.app: return
         if not self.current_path:
+            self.log_to_display("Current path is empty, listing buckets instead.")
             self._list_buckets()
             return
 
@@ -135,16 +146,20 @@ class S3Navigator:
         prefix = "/".join(self.current_path[1:]) + (
             "/" if len(self.current_path) > 1 else ""
         )
+        self.log_to_display(f"Listing objects in s3://{bucket}/{prefix}")
 
         objects_or_error = self.s3_client.list_objects(bucket, prefix)
 
         if objects_or_error and objects_or_error[0].get("type") == "ERROR":
             self.current_items = objects_or_error
+            self.log_to_display(f"Error listing objects: {objects_or_error[0].get('name')}")
         elif objects_or_error and objects_or_error[0].get("type") == "INFO":
             self.current_items = objects_or_error
+            self.log_to_display(f"Info listing objects: {objects_or_error[0].get('name')}")
         else:
             self.current_items = objects_or_error
             self._sort_items()
+            self.log_to_display(f"Found {len(self.current_items)} items in s3://{bucket}/{prefix}")
             
         self.app.update_display(
             self.current_items, self.current_path, self.selected_items,
@@ -164,6 +179,7 @@ class S3Navigator:
         if item["name"] == "..":
             self._navigate_up()
         elif item["type"] == "BUCKET" or item["type"] == "DIR":
+            self.log_to_display(f"Navigating into {item['type']}: {item['name']}")
             self.current_path.append(item["name"])
             self._list_objects()
         # Files can't be navigated into
@@ -171,10 +187,13 @@ class S3Navigator:
     def _navigate_up(self) -> None:
         """Navigate up one level."""
         if not self.current_path:
+            self.log_to_display("Already at root, cannot navigate up.")
             return
 
+        self.log_to_display(f"Navigating up from: {'/'.join(self.current_path)}")
         self.current_path.pop()
         if not self.current_path:
+            self.log_to_display("Navigated to root, listing buckets.")
             self._list_buckets()
         else:
             self._list_objects()
@@ -188,22 +207,29 @@ class S3Navigator:
         if not self.app.confirm_deletion(self.selected_items):
             return
 
+        self.log_to_display(f"Attempting to delete {len(self.selected_items)} items: {', '.join(self.selected_items)}")
         for item_key in self.selected_items:
             parts = item_key.split("/")
             bucket = parts[0]
             key = "/".join(parts[1:]) if len(parts) > 1 else ""
-
+            self.log_to_display(f"Deleting s3://{bucket}/{key}")
             try:
                 self.s3_client.delete_object(bucket, key)
+                self.log_to_display(f"Successfully deleted s3://{bucket}/{key}")
             except Exception as e:
+                error_message = f"Delete Error: {item_key} - {str(e)}"
+                self.log_to_display(error_message)
                 if self.app:
-                    self.app.query_one("#path_display", Static).update(f"Delete Error: {item_key} - {str(e)}")
+                    # self.app.query_one("#path_display", Static).update(error_message) # Keep or remove this line based on desired UX
+                    pass # Log is now primary for this error
 
         self.selected_items = []
+        self.log_to_display("Deletion process finished, refreshing view.")
         self._refresh()
 
     def _refresh(self) -> None:
         """Refresh the current view."""
+        self.log_to_display(f"Refreshing view for: {'/'.join(self.current_path) or 'root'}")
         if not self.current_path:
             self._list_buckets()
         else:
@@ -212,6 +238,7 @@ class S3Navigator:
     def _toggle_sort(self) -> None:
         """Toggle sort method."""
         if not self.app: return
+        self.log_to_display(f"Toggling sort. Current: {self.sort_by}, Reverse: {self.sort_reverse}")
         sort_options = ["name", "size", "last_modified"]
         current_index = sort_options.index(self.sort_by)
 
@@ -222,6 +249,7 @@ class S3Navigator:
             self.sort_by = sort_options[current_index + 1]
 
         self._sort_items()
+        self.log_to_display(f"Sort changed to: {self.sort_by}, Reverse: {self.sort_reverse}. Updating display.")
         self.app.update_display(
             self.current_items, self.current_path, self.selected_items,
             self.sort_by, self.sort_reverse
