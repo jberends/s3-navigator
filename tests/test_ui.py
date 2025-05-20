@@ -2,8 +2,11 @@
 
 import unittest
 from unittest import mock
+import pytest
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from s3_navigator.ui.display import Display, S3NavigatorDisplay
+from s3_navigator.ui.display import S3NavigatorDisplay
+from textual.widgets import DataTable
 
 
 class TestDisplay(unittest.TestCase):
