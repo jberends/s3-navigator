@@ -23,7 +23,7 @@ S3 Navigator is a command-line tool that provides a Norton Commander-style inter
 - Show help information for available commands
 - Highlight the currently selected item
 - provide a solid takeover of the terminal and perform very carefull redrawing of the screen
-- A 5-line log window positioned above the footer, displaying log statements of backend calls.
+- A 6-line log window positioned above the footer, displaying log statements of backend calls.
 
 ### Input Handling
 - Support keyboard navigation using arrow keys (up/down/right (directory down) and left (directory up))
@@ -33,6 +33,7 @@ S3 Navigator is a command-line tool that provides a Norton Commander-style inter
 - 'q' to quit the application
 - 'r' to refresh the current view
 - 's' to sort on name ASC, name DESC, size ASC, size DESC, modification time ASC/DESC
+- 'C' to calculate sizes of all visible uncalculated items
 
 ### Performance Considerations
 - Implement efficient caching to minimize API calls to AWS
@@ -87,6 +88,8 @@ S3 Navigator is a command-line tool that provides a Norton Commander-style inter
 | q | Quit the application |
 | r | Refresh current view |
 | s | sort tree |
+| c | Calculate size of selected directory/bucket |
+| C | Calculate sizes of all visible uncalculated items |
 
 ## Implementation 
 
@@ -112,7 +115,7 @@ S3 Navigator is a command-line tool that provides a Norton Commander-style inter
    - Type (BUCKET, DIR, FILE)
    - Size (human-readable format: B, KB, MB, GB, TB)
    - Last modified timestamp
-4. **Log Window**: A 5-line area above the footer to display backend activity logs.
+4. **Log Window**: A 6-line area above the footer to display backend activity logs.
 5. **Help Panel**: Available keyboard commands
 
 ### Color Scheme

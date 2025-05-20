@@ -63,6 +63,8 @@ class S3Navigator:
         self.app.delete_callback = self._delete_selected
         self.app.refresh_callback = self._refresh
         self.app.sort_callback = self._toggle_sort
+        self.app.calculate_size_callback = self._handle_calculate_size_request
+        self.app.calculate_all_sizes_callback = self._handle_calculate_all_sizes_request
         
         if self.serve:
             self.app.run()
@@ -277,3 +279,117 @@ class S3Navigator:
 
         actual_items.sort(key=get_sort_key, reverse=self.sort_reverse)
         self.current_items = error_info_items + actual_items
+
+    def _handle_calculate_size_request(self, item_name: str) -> None:
+        """Handle request to calculate size for a specific item."""
+        if not self.app:
+            return
+
+        target_item_index = -1
+        for i, item_data in enumerate(self.current_items):
+            if item_data.get("name") == item_name and item_data.get("type") in ["BUCKET", "DIR"]:
+                target_item_index = i
+                break
+        
+        if target_item_index == -1:
+            self.log_to_display(f"Could not find item '{item_name}' to calculate size.")
+            return
+
+        item_to_calc = self.current_items[target_item_index]
+        self.log_to_display(f"Calculating size for {item_to_calc['type']}: {item_to_calc['name']}...")
+
+        bucket_name = ""
+        object_prefix = ""
+
+        if item_to_calc["type"] == "BUCKET":
+            bucket_name = item_to_calc["name"]
+            # For a bucket, the prefix for calculation is empty (all objects in bucket)
+            object_prefix = "" 
+            self.log_to_display(f"Target is BUCKET. Bucket: {bucket_name}, Prefix for S3: ''")
+        elif item_to_calc["type"] == "DIR":
+            if not self.current_path:
+                # This shouldn't happen if a DIR is selected, as current_path should have the bucket.
+                self.log_to_display(f"Error: DIR selected but current_path is empty.")
+                return
+            bucket_name = self.current_path[0]
+            # Construct prefix: join current_path elements after bucket, then add item_name
+            dir_path_parts = self.current_path[1:] + [item_to_calc["name"]]
+            object_prefix = "/".join(dir_path_parts) + "/" # Ensure trailing slash for directories
+            self.log_to_display(f"Target is DIR. Bucket: {bucket_name}, Current S3 Path: {'/'.join(self.current_path)}, Item: {item_to_calc['name']}. Prefix for S3: {object_prefix}")
+
+        try:
+            # Ensure s3_client has _calculate_directory_size method accessible
+            calculated_size = self.s3_client._calculate_directory_size(bucket_name, object_prefix)
+            self.current_items[target_item_index]["size"] = calculated_size
+            self.log_to_display(f"Size calculation complete for {item_to_calc['name']}: {self.app._format_size(calculated_size) if self.app else calculated_size}")
+        except Exception as e:
+            self.log_to_display(f"Error calculating size for {item_to_calc['name']}: {e}")
+            # Optionally set size back to -1 or an error indicator
+            self.current_items[target_item_index]["size"] = -1 # Indicate error or keep pending
+
+        # Refresh display
+        if self.app:
+            self.app.update_display(
+                self.current_items,
+                self.current_path,
+                self.selected_items,
+                self.sort_by,
+                self.sort_reverse
+            )
+
+    def _handle_calculate_all_sizes_request(self) -> None:
+        """Handle request to calculate size for all visible items with size -1."""
+        if not self.app:
+            return
+
+        self.log_to_display("Starting batch size calculation for all visible pending items...")
+        items_to_calculate_count = sum(1 for item_data in self.current_items 
+                                       if item_data.get("type") in ["BUCKET", "DIR"] and item_data.get("size") == -1)
+        
+        if items_to_calculate_count == 0:
+            self.log_to_display("No items found requiring size calculation.")
+            return
+
+        self.log_to_display(f"Found {items_to_calculate_count} items to calculate.")
+        calculated_count = 0
+
+        for i, item_data in enumerate(self.current_items):
+            if item_data.get("type") in ["BUCKET", "DIR"] and item_data.get("size") == -1:
+                item_name = item_data["name"]
+                item_type = item_data["type"]
+                self.log_to_display(f"Calculating size for {item_type}: {item_name} ({calculated_count + 1}/{items_to_calculate_count})...")
+                
+                bucket_name = ""
+                object_prefix = ""
+
+                if item_type == "BUCKET":
+                    bucket_name = item_name
+                    object_prefix = ""
+                elif item_type == "DIR":
+                    if not self.current_path:
+                        self.log_to_display(f"Error: DIR {item_name} selected but current_path is empty. Skipping.")
+                        continue
+                    bucket_name = self.current_path[0]
+                    dir_path_parts = self.current_path[1:] + [item_name]
+                    object_prefix = "/".join(dir_path_parts) + "/"
+                
+                try:
+                    calculated_size = self.s3_client._calculate_directory_size(bucket_name, object_prefix)
+                    self.current_items[i]["size"] = calculated_size
+                    self.log_to_display(f"Size for {item_name}: {self.app._format_size(calculated_size) if self.app else calculated_size}")
+                    calculated_count += 1
+                except Exception as e:
+                    self.log_to_display(f"Error calculating size for {item_name}: {e}")
+                    self.current_items[i]["size"] = -1 # Keep as pending or mark error
+
+                # Refresh display after each calculation to show progress
+                if self.app:
+                    self.app.update_display(
+                        self.current_items,
+                        self.current_path,
+                        self.selected_items,
+                        self.sort_by,
+                        self.sort_reverse
+                    )
+        
+        self.log_to_display("Batch size calculation finished.")

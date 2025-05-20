@@ -14,7 +14,7 @@ class TestDisplay(unittest.TestCase):
 
     def test_init(self) -> None:
         """Test initialization of the Display."""
-        display = Display()
+        display = S3NavigatorDisplay()
         self.assertIsNone(display.app)
         self.assertEqual(display.selected_index, 0)
         self.assertEqual(display.path, [])
@@ -23,7 +23,7 @@ class TestDisplay(unittest.TestCase):
 
     def test_update_view_without_app(self) -> None:
         """Test updating the view when no app is set."""
-        display = Display()
+        display = S3NavigatorDisplay()
         
         # Set up test data
         items = [
@@ -44,7 +44,7 @@ class TestDisplay(unittest.TestCase):
 
     def test_update_view_with_app(self) -> None:
         """Test updating the view when app is set."""
-        display = Display()
+        display = S3NavigatorDisplay()
         display.app = mock.MagicMock()
         
         # Set up test data
@@ -62,7 +62,7 @@ class TestDisplay(unittest.TestCase):
 
     def test_confirm_deletion_without_app(self) -> None:
         """Test confirm deletion when no app is set."""
-        display = Display()
+        display = S3NavigatorDisplay()
         
         # Call the method with some items
         items = ["bucket/item1", "bucket/item2"]
@@ -73,7 +73,7 @@ class TestDisplay(unittest.TestCase):
 
     def test_confirm_deletion_with_app(self) -> None:
         """Test confirm deletion when app is set."""
-        display = Display()
+        display = S3NavigatorDisplay()
         display.app = mock.MagicMock()
         display.app.confirm_deletion.return_value = True
         

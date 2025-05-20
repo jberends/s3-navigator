@@ -46,7 +46,7 @@ class S3NavigatorDisplay(App):
     }
 
     #log_window {
-        height: 5;
+        height: 6;
         border: round $primary;
         background: $panel;
         padding: 0 1;
@@ -74,6 +74,8 @@ class S3NavigatorDisplay(App):
         ("backspace", "delete", "Delete"),
         ("right", "open", "Open"),
         ("left", "up", "Up"),
+        ("c", "calculate_size", "Calc. Size"),
+        ("C", "calculate_all_sizes", "Calc. All Sizes"),
     ]
 
     def __init__(
@@ -88,6 +90,8 @@ class S3NavigatorDisplay(App):
         delete_callback: Optional[Callable] = None,
         refresh_callback: Optional[Callable] = None,
         sort_callback: Optional[Callable] = None,
+        calculate_size_callback: Optional[Callable] = None,
+        calculate_all_sizes_callback: Optional[Callable] = None,
     ):
         """Initialize the display.
 
@@ -102,6 +106,8 @@ class S3NavigatorDisplay(App):
             delete_callback: Callback for deletion action
             refresh_callback: Callback for refresh action
             sort_callback: Callback for sort action
+            calculate_size_callback: Callback for calculate size action
+            calculate_all_sizes_callback: Callback for calculate all sizes action
         """
         super().__init__()
         self.navigator_instance = navigator_instance
@@ -114,6 +120,8 @@ class S3NavigatorDisplay(App):
         self.delete_callback = delete_callback
         self.refresh_callback = refresh_callback
         self.sort_callback = sort_callback
+        self.calculate_size_callback = calculate_size_callback
+        self.calculate_all_sizes_callback = calculate_all_sizes_callback
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
@@ -164,6 +172,32 @@ class S3NavigatorDisplay(App):
             # Navigate up one level
             if self.path_changed_callback:
                 self.path_changed_callback("up", None)
+
+    def action_calculate_size(self) -> None:
+        """Action to trigger size calculation for the selected item."""
+        table = self.query_one("#item_table", DataTable)
+        if table.cursor_row is not None and self.calculate_size_callback:
+            if 0 <= table.cursor_row < len(self.current_items):
+                item = self.current_items[table.cursor_row]
+                if item["type"] == "BUCKET" or item["type"] == "DIR":
+                    self.add_log_message(f"Requesting size calculation for {item['type']}: {item['name']}...")
+                    self.calculate_size_callback(item["name"]) 
+                else:
+                    self.add_log_message(f"Cannot calculate size for item type: {item['type']}.")
+            else:
+                self.add_log_message("No valid item selected for size calculation.")
+        elif not self.calculate_size_callback:
+            self.add_log_message("Size calculation callback not configured.")
+        else:
+            self.add_log_message("No item selected in the table.")
+
+    def action_calculate_all_sizes(self) -> None:
+        """Action to trigger size calculation for all visible pending items."""
+        if self.calculate_all_sizes_callback:
+            self.add_log_message("Requesting calculation for ALL visible pending item sizes...")
+            self.calculate_all_sizes_callback()
+        else:
+            self.add_log_message("Calculate all sizes callback not configured.")
 
     def add_log_message(self, message: str) -> None:
         """Add a message to the log window."""
@@ -268,6 +302,8 @@ class S3NavigatorDisplay(App):
         Returns:
             Formatted size string
         """
+        if size_bytes == -1:
+            return "[pending]"
         if size_bytes == 0:
             return "0 B"
 
