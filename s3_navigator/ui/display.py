@@ -50,6 +50,14 @@ class S3NavigatorDisplay(App):
     selected_items = reactive[List[str]]([])
     current_items = reactive[List[Dict[str, Any]]]([])
 
+    # Base column names
+    BASE_COLUMNS = ["Type", "Name", "Size", "Last Modified"]
+    SORTABLE_COLUMNS_MAP = {
+        "name": "Name",
+        "size": "Size",
+        "last_modified": "Last Modified",
+    }
+
     BINDINGS = [
         ("q", "quit", "Quit"),
         ("r", "refresh", "Refresh"),
@@ -110,7 +118,8 @@ class S3NavigatorDisplay(App):
         """Initialize the app on mount."""
         self.title = self.app_title
         table = self.query_one("#item_table", DataTable)
-        table.add_columns("Type", "Name", "Size", "Last Modified")
+        # Use * operator to unpack the list of base column names
+        table.add_columns(*self.BASE_COLUMNS)
         self.sub_title = f"Profile: {self.profile or 'default'} | Region: {self.region or 'unknown'}"
 
         # Load initial data by calling back to the navigator instance
@@ -148,7 +157,12 @@ class S3NavigatorDisplay(App):
                 self.path_changed_callback("up", None)
 
     def update_display(
-        self, items: List[Dict[str, Any]], path: List[str], selected_items: List[str]
+        self, 
+        items: List[Dict[str, Any]], 
+        path: List[str], 
+        selected_items: List[str],
+        sort_by: str,
+        sort_reverse: bool
     ) -> None:
         """Update the display with new data.
 
@@ -156,6 +170,8 @@ class S3NavigatorDisplay(App):
             items: List of items to display, or an error dict
             path: Current path
             selected_items: List of selected item keys
+            sort_by: The field being sorted by
+            sort_reverse: True if sort is descending, False otherwise
         """
         self.current_items = items
         self.current_path = path
@@ -163,6 +179,28 @@ class S3NavigatorDisplay(App):
 
         path_widget = self.query_one("#path_display", Static)
         table = self.query_one("#item_table", DataTable)
+
+        # Update column headers with sort indicators
+        column_keys = list(table.columns.keys())
+        new_labels = list(self.BASE_COLUMNS) # Start with base names
+
+        for i, base_label in enumerate(self.BASE_COLUMNS):
+            indicator = ""
+            # Check if this base_label corresponds to the current sort_by field
+            # This requires finding which sort_by key maps to the current base_label
+            current_sort_field_display_name = self.SORTABLE_COLUMNS_MAP.get(sort_by)
+            if current_sort_field_display_name == base_label:
+                indicator = " \u25BC" if sort_reverse else " \u25B2" # ▼ or ▲
+            new_labels[i] = f"{base_label}{indicator}"
+
+        # Update the labels of existing columns
+        # This assumes the order of columns in table.columns matches BASE_COLUMNS
+        for col_key, new_label in zip(column_keys, new_labels):
+            table.columns[col_key].label = new_label
+        
+        # Ensure the table refreshes its header (might be automatic with reactive labels)
+        table.refresh(layout=True)
+
         table.clear()
 
         if items and items[0].get("type") == "ERROR":

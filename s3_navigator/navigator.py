@@ -1,7 +1,7 @@
 """Core navigator class that handles S3 browsing functionality."""
 
 from typing import Any, Dict, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 from s3_navigator.s3_client import S3Client
 from s3_navigator.ui.display import S3NavigatorDisplay
@@ -101,7 +101,8 @@ class S3Navigator:
                 self.selected_items.append(item_key)
 
             self.app.update_display(
-                self.current_items, self.current_path, self.selected_items
+                self.current_items, self.current_path, self.selected_items,
+                self.sort_by, self.sort_reverse
             )
 
     def _list_buckets(self) -> None:
@@ -119,7 +120,8 @@ class S3Navigator:
             self._sort_items()
             
         self.app.update_display(
-            self.current_items, self.current_path, self.selected_items
+            self.current_items, self.current_path, self.selected_items,
+            self.sort_by, self.sort_reverse
         )
 
     def _list_objects(self) -> None:
@@ -145,7 +147,8 @@ class S3Navigator:
             self._sort_items()
             
         self.app.update_display(
-            self.current_items, self.current_path, self.selected_items
+            self.current_items, self.current_path, self.selected_items,
+            self.sort_by, self.sort_reverse
         )
 
     def _navigate_into(self, selected_idx: int) -> None:
@@ -220,7 +223,8 @@ class S3Navigator:
 
         self._sort_items()
         self.app.update_display(
-            self.current_items, self.current_path, self.selected_items
+            self.current_items, self.current_path, self.selected_items,
+            self.sort_by, self.sort_reverse
         )
 
     def _sort_items(self) -> None:
@@ -231,8 +235,14 @@ class S3Navigator:
             elif self.sort_by == "size":
                 return item.get("size", 0)
             elif self.sort_by == "last_modified":
-                return item.get("last_modified", datetime.min if isinstance(item.get("last_modified"), datetime) else "")
-            return item["name"].lower()
+                dt = item.get("last_modified")
+                if isinstance(dt, datetime):
+                    # If aware, convert to naive UTC for comparison
+                    if dt.tzinfo is not None and dt.tzinfo.utcoffset(dt) is not None:
+                        return dt.astimezone(timezone.utc).replace(tzinfo=None)
+                    return dt # Already naive
+                return datetime.min # Fallback for non-datetime or missing values
+            return item["name"].lower() # Default sort key if sort_by is unrecognized
         
         actual_items = [item for item in self.current_items if item.get("type") not in ("ERROR", "INFO")]
         error_info_items = [item for item in self.current_items if item.get("type") in ("ERROR", "INFO")]

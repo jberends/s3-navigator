@@ -1,6 +1,6 @@
 """S3 client wrapper for interacting with AWS S3."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import boto3  # type: ignore
@@ -52,7 +52,7 @@ class S3Client:
                         "name": "No Buckets Found",
                         "message": "Either no S3 buckets exist for the current AWS profile/region, or the credentials lack permission to list them.",
                         "size": 0,
-                        "last_modified": datetime.now(),
+                        "last_modified": datetime.now(timezone.utc),
                     }
                 ]
             
@@ -80,7 +80,7 @@ class S3Client:
                     "name": f"Error Listing Buckets: {error_code}",
                     "message": error_message,
                     "size": 0,
-                    "last_modified": datetime.now(),
+                    "last_modified": datetime.now(timezone.utc),
                 }
             ]
 
@@ -105,7 +105,7 @@ class S3Client:
                         "name": "..",
                         "type": "DIR",
                         "size": 0,
-                        "last_modified": datetime.now(),
+                        "last_modified": datetime.now(timezone.utc),
                     }
                 )
 
@@ -125,7 +125,7 @@ class S3Client:
                                 "size": self._calculate_directory_size(
                                     bucket, common_prefix["Prefix"]
                                 ),
-                                "last_modified": datetime.now(),  # Directories don't have a last modified time
+                                "last_modified": datetime.now(timezone.utc),  # Directories don't have a last modified time
                             }
                         )
 
@@ -167,7 +167,7 @@ class S3Client:
                     "name": f"Error accessing {bucket}/{prefix or ''}: {error_code}",
                     "message": error_message,
                     "size": 0,
-                    "last_modified": datetime.now(),
+                    "last_modified": datetime.now(timezone.utc),
                 }
             ]
 
